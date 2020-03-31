@@ -17,9 +17,10 @@ type Server struct {
 	agents []agents.Agent
 }
 
-func NewServer() *Server {
-	rpcClient := utils.NewHttpClient()
-
+func registerBTCRelayer(
+	rpcClient *utils.HttpClient,
+	agentsList []agents.Agent,
+) []agents.Agent {
 	btcR := &agents.BTCRelayer{}
 	btcR.ID = 1
 	btcR.Name = "Bitcoin relayer"
@@ -27,7 +28,13 @@ func NewServer() *Server {
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = rpcClient
 	btcR.Network = "main"
+	return append(agentsList, btcR)
+}
 
+func registerBNBRelayer(
+	rpcClient *utils.HttpClient,
+	agentsList []agents.Agent,
+) []agents.Agent {
 	bnbR := &agents.BNBRelayer{}
 	bnbR.ID = 2
 	bnbR.Name = "Binance chain relayer"
@@ -35,8 +42,14 @@ func NewServer() *Server {
 	bnbR.Quit = make(chan bool)
 	bnbR.RPCClient = rpcClient
 	bnbR.Network = "main"
+	return append(agentsList, bnbR)
+}
 
-	agents := []agents.Agent{btcR, bnbR}
+func NewServer() *Server {
+	rpcClient := utils.NewHttpClient()
+	agents := []agents.Agent{}
+	agents = registerBTCRelayer(rpcClient, agents)
+	agents = registerBNBRelayer(rpcClient, agents)
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)
 	signal.Notify(quitChan, syscall.SIGINT)
