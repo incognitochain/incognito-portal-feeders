@@ -21,8 +21,8 @@ func (b *BNBRelayer) getLatestBNBBlockHeightFromIncognito() (int64, error) {
 	if err != nil {
 		return int64(0), err
 	}
-	if relayingBlockRes.RPCError != nil {
-		return int64(0), errors.New(relayingBlockRes.RPCError.Message)
+	if relayingBlockRes.Error != nil {
+		return int64(0), errors.New(relayingBlockRes.Error.Message)
 	}
 
 	res := relayingBlockRes.Result.(map[string]interface{})
@@ -89,8 +89,8 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 	if err != nil {
 		return err
 	}
-	if relayingBlockRes.RPCError != nil {
-		return errors.New(relayingBlockRes.RPCError.Message)
+	if relayingBlockRes.Error != nil {
+		return errors.New(relayingBlockRes.Error.Message)
 	}
 	return nil
 }

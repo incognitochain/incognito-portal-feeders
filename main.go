@@ -19,6 +19,7 @@ type Server struct {
 
 func NewServer() *Server {
 	rpcClient := utils.NewHttpClient()
+	restfulClient := utils.NewRestfulClient(agents.CoinMarketCapHost, agents.CoinMarketCapVersion)
 
 	btcR := &agents.BTCRelayer{}
 	btcR.ID = 1
@@ -36,7 +37,18 @@ func NewServer() *Server {
 	bnbR.RPCClient = rpcClient
 	bnbR.Network = "main"
 
-	agents := []agents.Agent{btcR, bnbR}
+	exchangeRates:= &agents.ExchangeRatesRelayer{}
+	exchangeRates.ID = 3
+	exchangeRates.Name = "Exchange rates relayer"
+	exchangeRates.Frequency = 10
+	exchangeRates.Quit = make(chan bool)
+	exchangeRates.RPCClient = rpcClient
+	exchangeRates.RestfulClient = restfulClient
+	exchangeRates.Network = "main"
+
+
+	//agents := []agents.Agent{btcR, bnbR, exchangeRates}
+	agents := []agents.Agent{exchangeRates}
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)
 	signal.Notify(quitChan, syscall.SIGINT)

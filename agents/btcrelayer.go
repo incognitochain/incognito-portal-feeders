@@ -79,8 +79,8 @@ func (b *BTCRelayer) relayBTCBlockToIncognito(
 	if err != nil {
 		return err
 	}
-	if relayingBlockRes.RPCError != nil {
-		return errors.New(relayingBlockRes.RPCError.Message)
+	if relayingBlockRes.Error != nil {
+		return errors.New(relayingBlockRes.Error.Message)
 	}
 	return nil
 }
