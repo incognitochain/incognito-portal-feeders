@@ -60,7 +60,7 @@ func (b *ExchangeRatesRelayer) getPublicTokenRates() (CoinMarketCapQuotesLatest,
 func (b *ExchangeRatesRelayer) getPRVRates() (float64, error) {
 	//todo: get prv
 	//get prv from pde
-	return  500000, nil
+	return  0.5, nil
 }
 
 func convertPublicTokenPriceToPToken(price float64) uint64  {
