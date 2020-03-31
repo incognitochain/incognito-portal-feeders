@@ -12,4 +12,7 @@ const (
 
 	// address of a bnb peer on testnet
 	BNBTestnetAddress = "http://localhost:26657"
+
+	//
+
 )

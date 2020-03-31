@@ -71,27 +71,19 @@ func buildBNBHeaderStr (block *types.Block) (string, error) {
 	return bnbHeaderStr, nil
 }
 
+
+
 func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
 	headerBlockStr string,
 ) error {
-	meta := map[string]interface{}{
-		"SenderAddress": "",
-		"Header":        headerBlockStr,
-		"BlockHeight":   bnbBlockHeight,
-	}
 	privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR" // TODO: figure out to make it secret
-	params := []interface{}{
-		privateKey, nil, -1, 0, meta,
-	}
-	var relayingBlockRes entities.RelayingBlockRes
-	err := b.RPCClient.RPCCall("createandsendtxwithrelayingbnbheader", params, &relayingBlockRes)
+
+	txID, err := CreateAndSendTxRelayBNBBlock(b.RPCClient, privateKey, headerBlockStr, bnbBlockHeight)
 	if err != nil {
 		return err
 	}
-	if relayingBlockRes.RPCError != nil {
-		return errors.New(relayingBlockRes.RPCError.Message)
-	}
+	fmt.Printf("relayBNBBlockToIncognito success with TxID: %v\n", txID)
 	return nil
 }
 
