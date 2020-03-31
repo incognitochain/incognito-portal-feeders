@@ -53,7 +53,7 @@ func registerExchangeRatesRelayer(
 	exchangeRates:= &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
 	exchangeRates.Name = "Exchange rates relayer"
-	exchangeRates.Frequency = 10
+	exchangeRates.Frequency = 60
 	exchangeRates.Quit = make(chan bool)
 	exchangeRates.RPCClient = rpcClient
 	exchangeRates.RestfulClient = restfulClient

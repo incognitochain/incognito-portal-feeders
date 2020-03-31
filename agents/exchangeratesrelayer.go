@@ -31,7 +31,7 @@ type CoinMarketCapQuotesLatest struct {
 }
 
 func (b *ExchangeRatesRelayer) getPublicTokenRates() (CoinMarketCapQuotesLatest, error) {
-	//get prv from CoinMarketCap
+	//get price from CoinMarketCap
 	header := map[string]string{
 		"X-CMC_PRO_API_KEY": CoinMarketCapKey,
 	}
