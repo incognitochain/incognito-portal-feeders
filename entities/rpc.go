@@ -8,6 +8,6 @@ type RPCError struct {
 
 type RPCBaseRes struct {
 	Id       int       `json:"id"`
-	Error *RPCError    `json:"error"`
+	RPCError *RPCError    `json:"error"`
 }
 

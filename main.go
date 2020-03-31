@@ -17,10 +17,10 @@ type Server struct {
 	agents []agents.Agent
 }
 
-func NewServer() *Server {
-	rpcClient := utils.NewHttpClient()
-	restfulClient := utils.NewRestfulClient(agents.CoinMarketCapHost, agents.CoinMarketCapVersion)
-
+func registerBTCRelayer(
+	rpcClient *utils.HttpClient,
+	agentsList []agents.Agent,
+) []agents.Agent {
 	btcR := &agents.BTCRelayer{}
 	btcR.ID = 1
 	btcR.Name = "Bitcoin relayer"
@@ -28,7 +28,13 @@ func NewServer() *Server {
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = rpcClient
 	btcR.Network = "main"
+	return append(agentsList, btcR)
+}
 
+func registerBNBRelayer(
+	rpcClient *utils.HttpClient,
+	agentsList []agents.Agent,
+) []agents.Agent {
 	bnbR := &agents.BNBRelayer{}
 	bnbR.ID = 2
 	bnbR.Name = "Binance chain relayer"
@@ -36,7 +42,14 @@ func NewServer() *Server {
 	bnbR.Quit = make(chan bool)
 	bnbR.RPCClient = rpcClient
 	bnbR.Network = "main"
+	return append(agentsList, bnbR)
+}
 
+func registerExchangeRatesRelayer(
+	rpcClient *utils.HttpClient,
+	agentsList []agents.Agent,
+) []agents.Agent {
+	restfulClient := utils.NewRestfulClient(agents.CoinMarketCapHost, agents.CoinMarketCapVersion)
 	exchangeRates:= &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
 	exchangeRates.Name = "Exchange rates relayer"
@@ -45,10 +58,16 @@ func NewServer() *Server {
 	exchangeRates.RPCClient = rpcClient
 	exchangeRates.RestfulClient = restfulClient
 	exchangeRates.Network = "main"
+	return append(agentsList, exchangeRates)
+}
 
+func NewServer() *Server {
+	rpcClient := utils.NewHttpClient()
+	agents := []agents.Agent{}
+	//agents = registerBTCRelayer(rpcClient, agents)
+	//agents = registerBNBRelayer(rpcClient, agents)
+	agents = registerExchangeRatesRelayer(rpcClient, agents)
 
-	//agents := []agents.Agent{btcR, bnbR, exchangeRates}
-	agents := []agents.Agent{exchangeRates}
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)
 	signal.Notify(quitChan, syscall.SIGINT)

@@ -21,8 +21,9 @@ func (b *BNBRelayer) getLatestBNBBlockHeightFromIncognito() (int64, error) {
 	if err != nil {
 		return int64(0), err
 	}
-	if relayingBlockRes.Error != nil {
-		return int64(0), errors.New(relayingBlockRes.Error.Message)
+
+	if relayingBlockRes.RPCError != nil {
+		return int64(0), errors.New(relayingBlockRes.RPCError.Message)
 	}
 
 	res := relayingBlockRes.Result.(map[string]interface{})
@@ -71,27 +72,21 @@ func buildBNBHeaderStr (block *types.Block) (string, error) {
 	return bnbHeaderStr, nil
 }
 
+
+
 func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
 	headerBlockStr string,
 ) error {
-	meta := map[string]interface{}{
-		"SenderAddress": "",
-		"Header":        headerBlockStr,
-		"BlockHeight":   bnbBlockHeight,
-	}
 	privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR" // TODO: figure out to make it secret
-	params := []interface{}{
-		privateKey, nil, -1, 0, meta,
-	}
-	var relayingBlockRes entities.RelayingBlockRes
-	err := b.RPCClient.RPCCall("createandsendtxwithrelayingbnbheader", params, &relayingBlockRes)
+
+	txID, err := CreateAndSendTxRelayBNBBlock(b.RPCClient, privateKey, headerBlockStr, bnbBlockHeight)
 	if err != nil {
 		return err
 	}
-	if relayingBlockRes.Error != nil {
-		return errors.New(relayingBlockRes.Error.Message)
-	}
+
+	fmt.Printf("relayBNBBlockToIncognito success with TxID: %v\n", txID)
+
 	return nil
 }
 

@@ -13,8 +13,7 @@ const (
 	// address of a bnb peer on testnet
 	BNBTestnetAddress = "http://localhost:26657"
 
-
-	//Echange rates Job
+	//Exchange rates Job
 	CoinMarketCapHost = "https://pro-api.coinmarketcap.com"
 	CoinMarketCapVersion = "v1"
 	//CMC_PRO_API_KEY

@@ -119,8 +119,10 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(coinMarketCapQuotesLatest CoinM
 		return err
 	}
 
-	if relayingBlockRes.Error != nil {
-		return errors.New(relayingBlockRes.Error.StackTrace)
+	if relayingBlockRes.RPCError != nil {
+		fmt.Printf("ExchangeRatesRelayer: call RPC error, %v", relayingBlockRes.RPCError.StackTrace)
+		fmt.Println()
+		return errors.New(relayingBlockRes.RPCError.Message)
 	}
 
 	fmt.Println("ExchangeRatesRelayer: Call RPC successfully!")

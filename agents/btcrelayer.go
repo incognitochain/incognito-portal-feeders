@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,11 +16,6 @@ import (
 
 type BTCRelayer struct {
 	AgentAbs
-}
-
-func (b *BTCRelayer) getLatestBTCBlockHashFromIncog() (string, error) {
-	// TODO: hardcoded the result (block hash) for now and will update when implementing this rpc on Incogninto chain
-	return "", nil
 }
 
 func getBlockCypherAPI(networkName string) gobcy.API {
@@ -64,10 +60,9 @@ func (b *BTCRelayer) relayBTCBlockToIncognito(
 	if err != nil {
 		return err
 	}
-
 	meta := map[string]interface{}{
 		"SenderAddress": "",
-		"Header":        string(blkBytes),
+		"Header":        base64.StdEncoding.EncodeToString(blkBytes),
 		"BlockHeight":   btcBlockHeight,
 	}
 	privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR" // TODO: figure out to make it secret
@@ -79,10 +74,23 @@ func (b *BTCRelayer) relayBTCBlockToIncognito(
 	if err != nil {
 		return err
 	}
-	if relayingBlockRes.Error != nil {
-		return errors.New(relayingBlockRes.Error.Message)
+	if relayingBlockRes.RPCError != nil {
+		return errors.New(relayingBlockRes.RPCError.Message)
 	}
 	return nil
+}
+
+func (b *BTCRelayer) getLatestBTCBlockHashFromIncog() (string, error) {
+	params := []interface{}{}
+	var btcRelayingBestStateRes entities.BTCRelayingBestStateRes
+	err := b.RPCClient.RPCCall("getbtcrelayingbeststate", params, &btcRelayingBestStateRes)
+	if err != nil {
+		return "", err
+	}
+	if btcRelayingBestStateRes.RPCError != nil {
+		return "", errors.New(btcRelayingBestStateRes.RPCError.Message)
+	}
+	return btcRelayingBestStateRes.Result.Hash.String(), nil
 }
 
 func (b *BTCRelayer) Execute() {
@@ -90,6 +98,7 @@ func (b *BTCRelayer) Execute() {
 
 	latestBTCBlkHash, err := b.getLatestBTCBlockHashFromIncog()
 	if err != nil {
+		fmt.Printf("Could not get latest btc block hash from incognito chain - with err: %v", err)
 		return
 	}
 
@@ -104,15 +113,18 @@ func (b *BTCRelayer) Execute() {
 	for {
 		nextCypherBlock, err := bc.GetBlock(nextBlkHeight, "", nil)
 		if err != nil {
+			fmt.Println("Get next cypher block err: ", err)
 			break
 		}
 
 		btcBlock, err := buildBTCBlockFromCypher(&nextCypherBlock)
 		if err != nil {
+			fmt.Println("Build btc block from cypher block error: ", err)
 			break
 		}
 		err = b.relayBTCBlockToIncognito(nextBlkHeight, btcBlock)
 		if err != nil {
+			fmt.Println("Relay btc block to incognito error: ", err)
 			break
 		}
 		nextBlkHeight++
