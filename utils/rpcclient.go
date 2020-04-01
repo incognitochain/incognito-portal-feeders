@@ -6,25 +6,35 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"time"
 )
 
 type HttpClient struct {
 	*http.Client
+	url      string
+	protocol string
+	host     string
+	port     uint
 }
 
 // NewHttpClient to get http client instance
-func NewHttpClient() *HttpClient {
+func NewHttpClient(url string, protocol string, host string, port uint) *HttpClient {
 	httpClient := &http.Client{
 		Timeout: time.Second * 60,
 	}
 	return &HttpClient{
-		httpClient,
+		Client: httpClient,
+		url:      url,
+		protocol: protocol,
+		host:     host,
+		port:     port,
 	}
 }
 
-func buildHttpServerAddress(protocol string, host string, port int) string {
+func buildHttpServerAddress(url string, protocol string, host string, port uint) string {
+	if url != "" {
+		return url
+	}
 	return fmt.Sprintf("%s://%s:%d", protocol, host, port)
 }
 
@@ -33,10 +43,9 @@ func (client *HttpClient) RPCCall(
 	params interface{},
 	rpcResponse interface{},
 ) (err error) {
-	rpcProtocol := GetENV("RPC_PROTOCOL", "http")
-	rpcHost := GetENV("RPC_HOST", "127.0.0.1")
-	rpcPort, _ := strconv.Atoi(GetENV("RPC_PORT", "9334"))
-	rpcEndpoint := buildHttpServerAddress(rpcProtocol, rpcHost, rpcPort)
+	rpcEndpoint := buildHttpServerAddress(
+		client.url, client.protocol, client.host, client.port,
+	)
 
 	payload := map[string]interface{}{
 		"method": method,

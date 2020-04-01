@@ -23,6 +23,7 @@ func (b *BNBRelayer) getLatestBNBBlockHeightFromIncognito() (int64, error) {
 		fmt.Errorf("Error when call RPC to get latest bnb header block height %v", err)
 		return int64(0), err
 	}
+
 	if relayingBlockRes.RPCError != nil {
 		fmt.Errorf(relayingBlockRes.RPCError.Message)
 		return int64(0), errors.New(relayingBlockRes.RPCError.Message)
@@ -108,6 +109,7 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 		fmt.Errorf("%v\n", relayingBlockRes.RPCError.Message)
 		return errors.New(relayingBlockRes.RPCError.Message)
 	}
+
 	return nil
 }
 
