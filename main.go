@@ -18,7 +18,6 @@ type Server struct {
 }
 
 func registerBTCRelayer(
-	rpcClient *utils.HttpClient,
 	agentsList []agents.Agent,
 ) []agents.Agent {
 	btcR := &agents.BTCRelayer{}
@@ -26,13 +25,12 @@ func registerBTCRelayer(
 	btcR.Name = "Bitcoin relayer"
 	btcR.Frequency = 3
 	btcR.Quit = make(chan bool)
-	btcR.RPCClient = rpcClient
-	btcR.Network = "main"
+	btcR.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
+	btcR.Network = "main" // btc network name
 	return append(agentsList, btcR)
 }
 
 func registerBNBRelayer(
-	rpcClient *utils.HttpClient,
 	agentsList []agents.Agent,
 ) []agents.Agent {
 	bnbR := &agents.BNBRelayer{}
@@ -40,13 +38,12 @@ func registerBNBRelayer(
 	bnbR.Name = "Binance chain relayer"
 	bnbR.Frequency = 2
 	bnbR.Quit = make(chan bool)
-	bnbR.RPCClient = rpcClient
-	bnbR.Network = "main"
+	bnbR.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
+	bnbR.Network = "main" // bnb network name
 	return append(agentsList, bnbR)
 }
 
 func registerExchangeRatesRelayer(
-	rpcClient *utils.HttpClient,
 	agentsList []agents.Agent,
 ) []agents.Agent {
 	restfulClient := utils.NewRestfulClient(agents.CoinMarketCapHost, agents.CoinMarketCapVersion)
@@ -55,18 +52,17 @@ func registerExchangeRatesRelayer(
 	exchangeRates.Name = "Exchange rates relayer"
 	exchangeRates.Frequency = 60
 	exchangeRates.Quit = make(chan bool)
-	exchangeRates.RPCClient = rpcClient
+	exchangeRates.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
 	exchangeRates.RestfulClient = restfulClient
 	exchangeRates.Network = "main"
 	return append(agentsList, exchangeRates)
 }
 
 func NewServer() *Server {
-	rpcClient := utils.NewHttpClient()
 	agents := []agents.Agent{}
-	agents = registerBTCRelayer(rpcClient, agents)
-	agents = registerBNBRelayer(rpcClient, agents)
-	agents = registerExchangeRatesRelayer(rpcClient, agents)
+	agents = registerBTCRelayer(agents)
+	agents = registerBNBRelayer(agents)
+	agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)
