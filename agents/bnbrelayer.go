@@ -82,33 +82,13 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
 	headerBlockStr string,
 ) error {
-	//privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR" // TODO: figure out to make it secret
-	//
-	//txID, err := CreateAndSendTxRelayBNBBlock(b.RPCClient, privateKey, headerBlockStr, bnbBlockHeight)
-	//if err != nil {
-	//	return err
-	//}
-	//fmt.Printf("relayBNBBlockToIncognito success with TxID: %v\n", txID)
+	privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR" // TODO: figure out to make it secret
 
-	meta := map[string]interface{}{
-		"SenderAddress": "12RuEdPjq4yxivzm8xPxRVHmkL74t4eAdUKPdKKhMEnpxPH3k8GEyULbwq4hjwHWmHQr7MmGBJsMpdCHsYAqNE18jipWQwciBf9yqvQ",
-		"Header":        headerBlockStr,
-		"BlockHeight":   bnbBlockHeight,
-	}
-	privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR"
-	params := []interface{}{
-		privateKey, nil, -1, 0, meta,
-	}
-	var relayingBlockRes entities.RelayingBlockRes
-	err := b.RPCClient.RPCCall("createandsendtxwithrelayingbnbheader", params, &relayingBlockRes)
+	txID, err := CreateAndSendTxRelayBNBHeader(b.RPCClient, privateKey, headerBlockStr, bnbBlockHeight)
 	if err != nil {
-		fmt.Errorf("Error when call RPC create and send relaying bnb header %v\n", err)
 		return err
 	}
-	if relayingBlockRes.RPCError != nil {
-		fmt.Errorf("%v\n", relayingBlockRes.RPCError.Message)
-		return errors.New(relayingBlockRes.RPCError.Message)
-	}
+	fmt.Printf("relayBNBBlockToIncognito success with TxID: %v\n", txID)
 
 	return nil
 }
@@ -146,7 +126,7 @@ func (b *BNBRelayer) Execute() {
 			break
 		}
 
-		// relay next BNB block to Incognito
+		//relay next BNB block to Incognito
 		err = b.relayBNBBlockToIncognito(nextBlockHeight, headerBlockStr)
 		if err != nil {
 			fmt.Printf("relayBNBBlockToIncognito error: %v\n", err)

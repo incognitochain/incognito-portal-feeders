@@ -76,3 +76,7 @@ func (client *HttpClient) RPCCall(
 	}
 	return nil
 }
+
+func (client HttpClient) GetURL() string {
+	return buildHttpServerAddress(client.url, client.protocol, client.host, client.port)
+}
