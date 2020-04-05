@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"math"
+	"math/big"
 	"portalfeeders/entities"
 	"portalfeeders/utils"
 )
@@ -16,13 +16,13 @@ type ExchangeRatesRelayer struct {
 }
 
 type Price struct {
-	Price float64
+	Price       float64
 	LastUpdated string
 }
 
 type CoinMarketCapQuotesLatestItem struct {
-	Id int64
-	Name string
+	Id    int64
+	Name  string
 	Quote map[string]*Price
 }
 
@@ -128,7 +128,7 @@ func (b *ExchangeRatesRelayer) getPRVRate() (uint64, error) {
 	return tokenPoolValueToBuy - newTokenPoolValueToBuy, nil
 }
 
-func convertPublicTokenPriceToPToken(price float64) uint64  {
+func convertPublicTokenPriceToPToken(price float64) uint64 {
 	result := price * math.Pow10(6)
 	roundUp := uint64(math.Ceil(result))
 	fmt.Printf("ExchangeRatesRelayer: Convert public token to pToken, price: %+v, result %+v, round up: %+v\n", price, result, roundUp)
@@ -163,32 +163,11 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 	if len(rates) == 0 {
 		return errors.New("ExchangeRatesRelayer: Exchange rates is empty")
 	}
-
-	meta := map[string]interface{}{
-		"SenderAddress": SenderAddressExchangeRates,
-		"Rates": rates,
-	}
-
-	params := []interface{}{
-		SenderPrivateKeyExchangeRates,
-		nil,
-		-1,
-		0,
-		meta,
-	}
-
-	var relayingBlockRes entities.RelayingBlockRes
-	err := b.RPCClient.RPCCall("createandsendportalexchangerates", params, &relayingBlockRes)
+	txID, err := CreateAndSendTxPortalExchangeRate(b.RPCClient, IncognitoPrivateKey, rates)
 	if err != nil {
 		return err
 	}
-
-	if relayingBlockRes.RPCError != nil {
-		fmt.Printf("ExchangeRatesRelayer: call RPC error, %v\n", relayingBlockRes.RPCError.StackTrace)
-		return errors.New(relayingBlockRes.RPCError.Message)
-	}
-
-	fmt.Println("ExchangeRatesRelayer: Call RPC successfully!")
+	fmt.Printf("pushExchangeRates success with TxID: %v\n", txID)
 	return nil
 }
 

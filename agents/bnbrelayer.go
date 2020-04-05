@@ -82,9 +82,7 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
 	headerBlockStr string,
 ) error {
-	privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR" // TODO: figure out to make it secret
-
-	txID, err := CreateAndSendTxRelayBNBHeader(b.RPCClient, privateKey, headerBlockStr, bnbBlockHeight)
+	txID, err := CreateAndSendTxRelayBNBHeader(b.RPCClient, IncognitoPrivateKey, headerBlockStr, bnbBlockHeight)
 	if err != nil {
 		return err
 	}

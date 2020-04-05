@@ -49,31 +49,48 @@ func buildBTCBlockFromCypher(cypherBlock *gobcy.Block) (*wire.MsgBlock, error) {
 	}, nil
 }
 
+// func (b *BTCRelayer) relayBTCBlockToIncognito(
+// 	btcBlockHeight int,
+// 	msgBlk *wire.MsgBlock,
+// ) error {
+// 	msgBlkBytes, err := json.Marshal(msgBlk)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	meta := map[string]interface{}{
+// 		"SenderAddress": "12S5Lrs1XeQLbqN4ySyKtjAjd2d7sBP2tjFijzmp6avrrkQCNFMpkXm3FPzj2Wcu2ZNqJEmh9JriVuRErVwhuQnLmWSaggobEWsBEci",
+// 		"Header":        base64.StdEncoding.EncodeToString(msgBlkBytes),
+// 		"BlockHeight":   btcBlockHeight,
+// 	}
+// 	privateKey := "112t8roafGgHL1rhAP9632Yef3sx5k8xgp8cwK4MCJsCL1UWcxXvpzg97N4dwvcD735iKf31Q2ZgrAvKfVjeSUEvnzKJyyJD3GqqSZdxN4or" // TODO: figure out to make it secret
+// 	params := []interface{}{
+// 		privateKey, nil, 5, -1, meta,
+// 	}
+// 	var relayingBlockRes entities.RelayingBlockRes
+// 	err = b.RPCClient.RPCCall("createandsendtxwithrelayingbtcheader", params, &relayingBlockRes)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if relayingBlockRes.RPCError != nil {
+// 		return errors.New(relayingBlockRes.RPCError.Message)
+// 	}
+// 	return nil
+// }
+
 func (b *BTCRelayer) relayBTCBlockToIncognito(
-	btcBlockHeight int,
+	btcBlockHeight int64,
 	msgBlk *wire.MsgBlock,
 ) error {
 	msgBlkBytes, err := json.Marshal(msgBlk)
 	if err != nil {
 		return err
 	}
-	meta := map[string]interface{}{
-		"SenderAddress": "12S5Lrs1XeQLbqN4ySyKtjAjd2d7sBP2tjFijzmp6avrrkQCNFMpkXm3FPzj2Wcu2ZNqJEmh9JriVuRErVwhuQnLmWSaggobEWsBEci",
-		"Header":        base64.StdEncoding.EncodeToString(msgBlkBytes),
-		"BlockHeight":   btcBlockHeight,
-	}
-	privateKey := "112t8roafGgHL1rhAP9632Yef3sx5k8xgp8cwK4MCJsCL1UWcxXvpzg97N4dwvcD735iKf31Q2ZgrAvKfVjeSUEvnzKJyyJD3GqqSZdxN4or" // TODO: figure out to make it secret
-	params := []interface{}{
-		privateKey, nil, 5, -1, meta,
-	}
-	var relayingBlockRes entities.RelayingBlockRes
-	err = b.RPCClient.RPCCall("createandsendtxwithrelayingbtcheader", params, &relayingBlockRes)
+	headerBlockStr := base64.StdEncoding.EncodeToString(msgBlkBytes)
+	txID, err := CreateAndSendTxRelayBTCHeader(b.RPCClient, IncognitoPrivateKey, headerBlockStr, btcBlockHeight)
 	if err != nil {
 		return err
 	}
-	if relayingBlockRes.RPCError != nil {
-		return errors.New(relayingBlockRes.RPCError.Message)
-	}
+	fmt.Printf("relayBTCBlockToIncognito success with TxID: %v\n", txID)
 	return nil
 }
 
@@ -120,7 +137,7 @@ func (b *BTCRelayer) Execute() {
 			fmt.Println("Build btc block from cypher block error: ", err)
 			break
 		}
-		err = b.relayBTCBlockToIncognito(nextBlkHeight, btcMsgBlock)
+		err = b.relayBTCBlockToIncognito(int64(nextBlkHeight), btcMsgBlock)
 		if err != nil {
 			fmt.Println("Relay btc block to incognito error: ", err)
 			break
