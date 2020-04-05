@@ -17,16 +17,16 @@ type Server struct {
 	agents []agents.Agent
 }
 
-func registerBTCRelayer(
+func registerBTCRelayerForTestNet3(
 	agentsList []agents.Agent,
 ) []agents.Agent {
 	btcR := &agents.BTCRelayer{}
 	btcR.ID = 1
 	btcR.Name = "Bitcoin relayer"
-	btcR.Frequency = 3
+	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
-	btcR.Network = "main" // btc network name
+	btcR.Network = "test3" // btc network name
 	return append(agentsList, btcR)
 }
 
@@ -60,9 +60,9 @@ func registerExchangeRatesRelayer(
 
 func NewServer() *Server {
 	agents := []agents.Agent{}
-	agents = registerBTCRelayer(agents)
-	agents = registerBNBRelayer(agents)
-	agents = registerExchangeRatesRelayer(agents)
+	agents = registerBTCRelayerForTestNet3(agents)
+	// agents = registerBNBRelayer(agents)
+	// agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)

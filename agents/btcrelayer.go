@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"portalfeeders/entities"
 
 	"github.com/blockcypher/gobcy"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 )
 
 type BTCRelayer struct {
@@ -27,7 +27,7 @@ func getBlockCypherAPI(networkName string) gobcy.API {
 	return bc
 }
 
-func buildBTCBlockFromCypher(cypherBlock *gobcy.Block) (*btcutil.Block, error) {
+func buildBTCBlockFromCypher(cypherBlock *gobcy.Block) (*wire.MsgBlock, error) {
 	prevBlkHash, err := chainhash.NewHashFromStr(cypherBlock.PrevBlock)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func buildBTCBlockFromCypher(cypherBlock *gobcy.Block) (*btcutil.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	msgBlk := wire.MsgBlock{
+	return &wire.MsgBlock{
 		Header: wire.BlockHeader{
 			Version:    int32(cypherBlock.Ver),
 			PrevBlock:  *prevBlkHash,
@@ -46,28 +46,25 @@ func buildBTCBlockFromCypher(cypherBlock *gobcy.Block) (*btcutil.Block, error) {
 			Nonce:      uint32(cypherBlock.Nonce),
 		},
 		Transactions: []*wire.MsgTx{},
-	}
-	blk := btcutil.NewBlock(&msgBlk)
-	// blk.SetHeight(int32(blkHeight))
-	return blk, nil
+	}, nil
 }
 
 func (b *BTCRelayer) relayBTCBlockToIncognito(
 	btcBlockHeight int,
-	blk *btcutil.Block,
+	msgBlk *wire.MsgBlock,
 ) error {
-	blkBytes, err := json.Marshal(blk)
+	msgBlkBytes, err := json.Marshal(msgBlk)
 	if err != nil {
 		return err
 	}
 	meta := map[string]interface{}{
-		"SenderAddress": "",
-		"Header":        base64.StdEncoding.EncodeToString(blkBytes),
+		"SenderAddress": "12S5Lrs1XeQLbqN4ySyKtjAjd2d7sBP2tjFijzmp6avrrkQCNFMpkXm3FPzj2Wcu2ZNqJEmh9JriVuRErVwhuQnLmWSaggobEWsBEci",
+		"Header":        base64.StdEncoding.EncodeToString(msgBlkBytes),
 		"BlockHeight":   btcBlockHeight,
 	}
-	privateKey := "112t8rnjeorQyyy36Vz5cqtfQNoXuM7M2H92eEvLWimiAtnQCSZiP2HXpMW7mECSRXeRrP8yPwxKGuziBvGVfmxhQJSt2KqHAPZvYmM1ZKwR" // TODO: figure out to make it secret
+	privateKey := "112t8roafGgHL1rhAP9632Yef3sx5k8xgp8cwK4MCJsCL1UWcxXvpzg97N4dwvcD735iKf31Q2ZgrAvKfVjeSUEvnzKJyyJD3GqqSZdxN4or" // TODO: figure out to make it secret
 	params := []interface{}{
-		privateKey, nil, -1, 0, meta,
+		privateKey, nil, 5, -1, meta,
 	}
 	var relayingBlockRes entities.RelayingBlockRes
 	err = b.RPCClient.RPCCall("createandsendtxwithrelayingbtcheader", params, &relayingBlockRes)
@@ -101,6 +98,7 @@ func (b *BTCRelayer) Execute() {
 		fmt.Printf("Could not get latest btc block hash from incognito chain - with err: %v", err)
 		return
 	}
+	fmt.Println("latestBTCBlkHash: ", latestBTCBlkHash)
 
 	bc := getBlockCypherAPI(b.GetNetwork())
 	cypherBlock, err := bc.GetBlock(0, latestBTCBlkHash, nil)
@@ -117,16 +115,18 @@ func (b *BTCRelayer) Execute() {
 			break
 		}
 
-		btcBlock, err := buildBTCBlockFromCypher(&nextCypherBlock)
+		btcMsgBlock, err := buildBTCBlockFromCypher(&nextCypherBlock)
 		if err != nil {
 			fmt.Println("Build btc block from cypher block error: ", err)
 			break
 		}
-		err = b.relayBTCBlockToIncognito(nextBlkHeight, btcBlock)
+		err = b.relayBTCBlockToIncognito(nextBlkHeight, btcMsgBlock)
 		if err != nil {
 			fmt.Println("Relay btc block to incognito error: ", err)
 			break
 		}
+		fmt.Printf("Relaying suceeded, Finished process for block: %s\n", btcMsgBlock.BlockHash())
 		nextBlkHeight++
+		time.Sleep(90 * time.Second)
 	}
 }

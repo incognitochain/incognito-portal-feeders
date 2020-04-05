@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"math"
 	"portalfeeders/entities"
 	"portalfeeders/utils"
@@ -27,7 +28,6 @@ type CoinMarketCapQuotesLatestItem struct {
 
 type CoinMarketCapQuotesLatest struct {
 	Data map[string]*CoinMarketCapQuotesLatestItem
-
 }
 
 func (b *ExchangeRatesRelayer) getPublicTokenRates() (CoinMarketCapQuotesLatest, error) {
@@ -37,7 +37,7 @@ func (b *ExchangeRatesRelayer) getPublicTokenRates() (CoinMarketCapQuotesLatest,
 	}
 
 	filter := map[string]string{
-		"id": IdCrytoFilter,
+		"id": CrytoFilterID,
 	}
 
 	result, err := b.RestfulClient.Get("cryptocurrency/quotes/latest", header, filter)
@@ -47,35 +47,101 @@ func (b *ExchangeRatesRelayer) getPublicTokenRates() (CoinMarketCapQuotesLatest,
 
 	var coinMarketCapQuotesLatest CoinMarketCapQuotesLatest
 	err = json.Unmarshal(result, &coinMarketCapQuotesLatest)
-
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error when unmarshal CoinMarketCapQuotesLatest, %v", err)
-		fmt.Println()
+		fmt.Printf("ExchangeRatesRelayer: has a error when unmarshal CoinMarketCapQuotesLatest, %v\n", err)
 		return CoinMarketCapQuotesLatest{}, errors.New("ExchangeRatesRelayer: has a error when unmarshal CoinMarketCapQuotesLatest")
 	}
 
 	return coinMarketCapQuotesLatest, nil
 }
 
-func (b *ExchangeRatesRelayer) getPRVRates() (float64, error) {
-	//todo: get prv
-	//get prv from pde
-	return  0.5, nil
+func (b *ExchangeRatesRelayer) getLatestBeaconHeight() (uint64, error) {
+	params := []interface{}{}
+	var beaconBestStateRes entities.BeaconBestStateRes
+	err := b.RPCClient.RPCCall("getbeaconbeststate", params, &beaconBestStateRes)
+	if err != nil {
+		return 0, err
+	}
+
+	if beaconBestStateRes.RPCError != nil {
+		fmt.Printf("getLatestBeaconHeight: call RPC error, %v\n", beaconBestStateRes.RPCError.StackTrace)
+		return 0, errors.New(beaconBestStateRes.RPCError.Message)
+	}
+	return beaconBestStateRes.Result.BeaconHeight, nil
+}
+
+func (b *ExchangeRatesRelayer) getPDEState(beaconHeight uint64) (*entities.PDEState, error) {
+	params := []interface{}{
+		map[string]uint64{
+			"BeaconHeight": beaconHeight,
+		},
+	}
+	var pdeStateRes entities.PDEStateRes
+	err := b.RPCClient.RPCCall("getpdestate", params, &pdeStateRes)
+	if err != nil {
+		return nil, err
+	}
+
+	if pdeStateRes.RPCError != nil {
+		fmt.Printf("getPDEState: call RPC error, %v\n", pdeStateRes.RPCError.StackTrace)
+		return nil, errors.New(pdeStateRes.RPCError.Message)
+	}
+	return pdeStateRes.Result, nil
+}
+
+func (b *ExchangeRatesRelayer) getPRVRate() (uint64, error) {
+	latestBeaconHeight, err := b.getLatestBeaconHeight()
+	if err != nil {
+		return 0, err
+	}
+	pdeState, err := b.getPDEState(latestBeaconHeight)
+	if err != nil {
+		return 0, err
+	}
+	poolPairs := pdeState.PDEPoolPairs
+	prvPustPairKey := fmt.Sprintf("pdepool-%d-%s-%s", latestBeaconHeight, PRVID, PUSDTID)
+	prvPustPair, found := poolPairs[prvPustPairKey]
+	if !found || prvPustPair.Token1PoolValue == 0 || prvPustPair.Token2PoolValue == 0 {
+		return 0, nil
+	}
+
+	tokenPoolValueToBuy := prvPustPair.Token1PoolValue
+	tokenPoolValueToSell := prvPustPair.Token2PoolValue
+	if prvPustPair.Token1IDStr == PRVID {
+		tokenPoolValueToSell = prvPustPair.Token1PoolValue
+		tokenPoolValueToBuy = prvPustPair.Token2PoolValue
+	}
+
+	invariant := big.NewInt(0)
+	invariant.Mul(big.NewInt(int64(tokenPoolValueToSell)), big.NewInt(int64(tokenPoolValueToBuy)))
+	newTokenPoolValueToSell := big.NewInt(0)
+	newTokenPoolValueToSell.Add(big.NewInt(int64(tokenPoolValueToSell)), big.NewInt(int64(1e9)))
+
+	newTokenPoolValueToBuy := big.NewInt(0).Div(invariant, newTokenPoolValueToSell).Uint64()
+	modValue := big.NewInt(0).Mod(invariant, newTokenPoolValueToSell)
+	if modValue.Cmp(big.NewInt(0)) != 0 {
+		newTokenPoolValueToBuy++
+	}
+	if tokenPoolValueToBuy <= newTokenPoolValueToBuy {
+		return 0, nil
+	}
+	return tokenPoolValueToBuy - newTokenPoolValueToBuy, nil
 }
 
 func convertPublicTokenPriceToPToken(price float64) uint64  {
-	result := price * math.Pow10(9)
+	result := price * math.Pow10(6)
 	roundUp := uint64(math.Ceil(result))
-	fmt.Printf("ExchangeRatesRelayer: Convert public token to pToken, price: %+v, result %+v, round up: %+v", price, result, roundUp)
-	fmt.Println()
+	fmt.Printf("ExchangeRatesRelayer: Convert public token to pToken, price: %+v, result %+v, round up: %+v\n", price, result, roundUp)
 	return roundUp
 }
 
-func (b *ExchangeRatesRelayer) pushExchangeRates(coinMarketCapQuotesLatest CoinMarketCapQuotesLatest, prvRates float64)  error {
+func (b *ExchangeRatesRelayer) pushExchangeRates(
+	coinMarketCapQuotesLatest CoinMarketCapQuotesLatest,
+	prvRate uint64,
+) error {
 	rates := make(map[string]uint64)
-
-	if converted := convertPublicTokenPriceToPToken(prvRates); converted > 0 {
-		rates[PRVId] = converted
+	if prvRate > 0 {
+		rates[PRVID] = prvRate
 	}
 
 	for _, value := range coinMarketCapQuotesLatest.Data {
@@ -84,18 +150,17 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(coinMarketCapQuotesLatest CoinM
 		}
 
 		if converted := convertPublicTokenPriceToPToken(value.Quote["USD"].Price); converted > 0 {
-			if value.Id == BTCCoinMarketCapId {
-				rates[BTCId] = converted
+			if value.Id == BTCCoinMarketCapID {
+				rates[BTCID] = converted
 			}
 
-			if value.Id == BNBCoinMarketCapId {
-				rates[BNBId] = converted
+			if value.Id == BNBCoinMarketCapID {
+				rates[BNBID] = converted
 			}
 		}
 	}
 
-
-	if len(rates) < 0 {
+	if len(rates) == 0 {
 		return errors.New("ExchangeRatesRelayer: Exchange rates is empty")
 	}
 
@@ -114,14 +179,12 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(coinMarketCapQuotesLatest CoinM
 
 	var relayingBlockRes entities.RelayingBlockRes
 	err := b.RPCClient.RPCCall("createandsendportalexchangerates", params, &relayingBlockRes)
-
 	if err != nil {
 		return err
 	}
 
 	if relayingBlockRes.RPCError != nil {
-		fmt.Printf("ExchangeRatesRelayer: call RPC error, %v", relayingBlockRes.RPCError.StackTrace)
-		fmt.Println()
+		fmt.Printf("ExchangeRatesRelayer: call RPC error, %v\n", relayingBlockRes.RPCError.StackTrace)
 		return errors.New(relayingBlockRes.RPCError.Message)
 	}
 
@@ -133,21 +196,18 @@ func (b *ExchangeRatesRelayer) Execute() {
 	fmt.Println("ExchangeRatesRelayer agent is executing...")
 	coinMarketCapQuotesLatest, err := b.getPublicTokenRates()
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error, %v", err)
-		fmt.Println()
+		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
 	}
 
 	fmt.Println(coinMarketCapQuotesLatest)
 
-	prvRates, err := b.getPRVRates()
+	prvRate, err := b.getPRVRate()
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error, %v", err)
-		fmt.Println()
+		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
 	}
 
-	err = b.pushExchangeRates(coinMarketCapQuotesLatest, prvRates)
+	err = b.pushExchangeRates(coinMarketCapQuotesLatest, prvRate)
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error, %v", err)
-		fmt.Println()
+		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
 	}
 }
