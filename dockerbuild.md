@@ -1,11 +1,19 @@
-#Build dockerfile
+###Build dockerfile
 ```
 $ docker build -t portalfeeders . 
 ```
 
-#Docker run
+###Docker run with default environment
 ```
 $ docker run --name portal-feeders portalfeeders 
+```
 
+###Docker run with environment
+```
+$ docker run --name portal-feeders -e "INCOGNITO_HOST=127.0.0.1" portalfeeders
+```
+
+###Docker container
+```
 $ docker start/restart/stop container_id
 ```
