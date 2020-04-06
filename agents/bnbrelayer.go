@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/tendermint/tendermint/rpc/client"
 	"github.com/tendermint/tendermint/types"
+	"os"
 	"portalfeeders/entities"
 	"time"
 )
@@ -82,7 +83,8 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
 	headerBlockStr string,
 ) error {
-	txID, err := CreateAndSendTxRelayBNBHeader(b.RPCClient, IncognitoPrivateKey, headerBlockStr, bnbBlockHeight)
+	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
+	txID, err := CreateAndSendTxRelayBNBHeader(b.RPCClient, incognitoPrivateKey, headerBlockStr, bnbBlockHeight)
 	if err != nil {
 		return err
 	}
@@ -93,9 +95,9 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 
 func (b *BNBRelayer) getServerAddress() string {
 	if b.GetNetwork() == "main" {
-		return BNBMainnetAddress
+		return os.Getenv("BNB_MAINNET_ADDRESS")
 	} else if b.GetNetwork() == "test" {
-		return BNBTestnetAddress
+		return os.Getenv("BNB_TESTNET_ADDRESS")
 	}
 	return ""
 }
