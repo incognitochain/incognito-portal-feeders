@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"portalfeeders/entities"
 	"portalfeeders/utils"
 )
@@ -33,7 +34,7 @@ type CoinMarketCapQuotesLatest struct {
 func (b *ExchangeRatesRelayer) getPublicTokenRates() (CoinMarketCapQuotesLatest, error) {
 	//get price from CoinMarketCap
 	header := map[string]string{
-		"X-CMC_PRO_API_KEY": CoinMarketCapKey,
+		"X-CMC_PRO_API_KEY": os.Getenv("COINMARKETCAP_KEY"),
 	}
 
 	filter := map[string]string{
@@ -163,10 +164,13 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 	if len(rates) == 0 {
 		return errors.New("ExchangeRatesRelayer: Exchange rates is empty")
 	}
-	txID, err := CreateAndSendTxPortalExchangeRate(b.RPCClient, IncognitoPrivateKey, rates)
+
+	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
+	txID, err := CreateAndSendTxPortalExchangeRate(b.RPCClient, incognitoPrivateKey, rates)
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("pushExchangeRates success with TxID: %v\n", txID)
 	return nil
 }

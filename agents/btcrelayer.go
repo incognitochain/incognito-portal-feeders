@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"portalfeeders/entities"
@@ -86,7 +87,8 @@ func (b *BTCRelayer) relayBTCBlockToIncognito(
 		return err
 	}
 	headerBlockStr := base64.StdEncoding.EncodeToString(msgBlkBytes)
-	txID, err := CreateAndSendTxRelayBTCHeader(b.RPCClient, IncognitoPrivateKey, headerBlockStr, btcBlockHeight)
+	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
+	txID, err := CreateAndSendTxRelayBTCHeader(b.RPCClient, incognitoPrivateKey, headerBlockStr, btcBlockHeight)
 	if err != nil {
 		return err
 	}

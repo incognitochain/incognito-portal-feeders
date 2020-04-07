@@ -14,11 +14,11 @@ type HttpClient struct {
 	url      string
 	protocol string
 	host     string
-	port     uint
+	port     string
 }
 
 // NewHttpClient to get http client instance
-func NewHttpClient(url string, protocol string, host string, port uint) *HttpClient {
+func NewHttpClient(url string, protocol string, host string, port string) *HttpClient {
 	httpClient := &http.Client{
 		Timeout: time.Second * 60,
 	}
@@ -31,11 +31,11 @@ func NewHttpClient(url string, protocol string, host string, port uint) *HttpCli
 	}
 }
 
-func buildHttpServerAddress(url string, protocol string, host string, port uint) string {
+func buildHttpServerAddress(url string, protocol string, host string, port string) string {
 	if url != "" {
 		return url
 	}
-	return fmt.Sprintf("%s://%s:%d", protocol, host, port)
+	return fmt.Sprintf("%s://%s:%s", protocol, host, port)
 }
 
 func (client *HttpClient) RPCCall(

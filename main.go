@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
 	"portalfeeders/agents"
 	"portalfeeders/utils"
 	"os"
@@ -25,7 +26,7 @@ func registerBTCRelayerForTestNet3(
 	btcR.Name = "Bitcoin relayer testnet3"
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
-	btcR.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
+	btcR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	btcR.Network = "test3" // btc network name
 	return append(agentsList, btcR)
 }
@@ -38,7 +39,7 @@ func registerBNBRelayer(
 	bnbR.Name = "Binance chain relayer"
 	bnbR.Frequency = 2
 	bnbR.Quit = make(chan bool)
-	bnbR.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
+	bnbR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	bnbR.Network = "main" // bnb network name
 	return append(agentsList, bnbR)
 }
@@ -46,13 +47,14 @@ func registerBNBRelayer(
 func registerExchangeRatesRelayer(
 	agentsList []agents.Agent,
 ) []agents.Agent {
-	restfulClient := utils.NewRestfulClient(agents.CoinMarketCapHost, agents.CoinMarketCapVersion)
+	restfulClient := utils.NewRestfulClient(os.Getenv("COINMARKETCAP_HOST"), os.Getenv("COINMARKETCAP_VERSION"))
+
 	exchangeRates:= &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
 	exchangeRates.Name = "Exchange rates relayer"
 	exchangeRates.Frequency = 60
 	exchangeRates.Quit = make(chan bool)
-	exchangeRates.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
+	exchangeRates.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	exchangeRates.RestfulClient = restfulClient
 	exchangeRates.Network = "main"
 	return append(agentsList, exchangeRates)
@@ -61,8 +63,8 @@ func registerExchangeRatesRelayer(
 func NewServer() *Server {
 	agents := []agents.Agent{}
 	agents = registerBTCRelayerForTestNet3(agents)
-	// agents = registerBNBRelayer(agents)
-	// agents = registerExchangeRatesRelayer(agents)
+	agents = registerBNBRelayer(agents)
+	agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)
@@ -111,6 +113,11 @@ func executeAgent(
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		panic("Error loading .env file")
+	}
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	s := NewServer()
 	s.Run()
