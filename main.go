@@ -37,10 +37,10 @@ func registerBNBRelayer(
 	bnbR := &agents.BNBRelayer{}
 	bnbR.ID = 2
 	bnbR.Name = "Binance chain relayer"
-	bnbR.Frequency = 2
+	bnbR.Frequency = 60
 	bnbR.Quit = make(chan bool)
 	bnbR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-	bnbR.Network = "main" // bnb network name
+	bnbR.Network = "test" // bnb network name
 	return append(agentsList, bnbR)
 }
 

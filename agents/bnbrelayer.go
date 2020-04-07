@@ -135,6 +135,6 @@ func (b *BNBRelayer) Execute() {
 		fmt.Printf("Relay bnb block header %v\n", nextBlockHeight)
 
 		nextBlockHeight++
-		time.Sleep(60000 * time.Millisecond)
+		time.Sleep(60 * time.Second)
 	}
 }
