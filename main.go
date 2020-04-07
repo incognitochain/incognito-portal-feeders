@@ -22,7 +22,7 @@ func registerBTCRelayerForTestNet3(
 ) []agents.Agent {
 	btcR := &agents.BTCRelayer{}
 	btcR.ID = 1
-	btcR.Name = "Bitcoin relayer"
+	btcR.Name = "Bitcoin relayer testnet3"
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = utils.NewHttpClient("", "http", "127.0.0.1", 9334) // incognito chain rpc endpoint
