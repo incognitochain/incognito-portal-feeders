@@ -146,6 +146,6 @@ func (b *BTCRelayer) Execute() {
 		}
 		fmt.Printf("Relaying suceeded, Finished process for block: %s\n", btcMsgBlock.BlockHash())
 		nextBlkHeight++
-		time.Sleep(90 * time.Second)
+		time.Sleep(30 * time.Second)
 	}
 }

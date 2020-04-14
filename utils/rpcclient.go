@@ -47,6 +47,8 @@ func (client *HttpClient) RPCCall(
 		client.url, client.protocol, client.host, client.port,
 	)
 
+	fmt.Println("rpcEndpoint: ", rpcEndpoint)
+
 	payload := map[string]interface{}{
 		"method": method,
 		"params": params,
@@ -58,8 +60,10 @@ func (client *HttpClient) RPCCall(
 	}
 
 	resp, err := client.Post(rpcEndpoint, "application/json", bytes.NewBuffer(payloadInBytes))
+	// resp, err := client.Post("http://192.168.1.101:9334", "application/json", bytes.NewBuffer(payloadInBytes))
 
 	if err != nil {
+		fmt.Println("calling err: ", err)
 		return err
 	}
 	respBody := resp.Body

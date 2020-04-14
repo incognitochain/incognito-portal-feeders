@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
-	"portalfeeders/agents"
-	"portalfeeders/utils"
 	"os"
 	"os/signal"
+	"portalfeeders/agents"
+	"portalfeeders/utils"
 	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Server struct {
@@ -18,16 +19,16 @@ type Server struct {
 	agents []agents.Agent
 }
 
-func registerBTCRelayerForTestNet3(
+func registerBTCRelayer(
 	agentsList []agents.Agent,
 ) []agents.Agent {
 	btcR := &agents.BTCRelayer{}
 	btcR.ID = 1
-	btcR.Name = "Bitcoin relayer testnet3"
+	btcR.Name = "Bitcoin relayer"
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-	btcR.Network = "test3" // btc network name
+	btcR.Network = os.Getenv("BTC_NETWORK")                                                                                             // btc network name
 	return append(agentsList, btcR)
 }
 
@@ -40,7 +41,7 @@ func registerBNBRelayer(
 	bnbR.Frequency = 2
 	bnbR.Quit = make(chan bool)
 	bnbR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-	bnbR.Network = "main" // bnb network name
+	bnbR.Network = "main"                                                                                                               // bnb network name
 	return append(agentsList, bnbR)
 }
 
@@ -49,7 +50,7 @@ func registerExchangeRatesRelayer(
 ) []agents.Agent {
 	restfulClient := utils.NewRestfulClient(os.Getenv("COINMARKETCAP_HOST"), os.Getenv("COINMARKETCAP_VERSION"))
 
-	exchangeRates:= &agents.ExchangeRatesRelayer{}
+	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
 	exchangeRates.Name = "Exchange rates relayer"
 	exchangeRates.Frequency = 60
@@ -62,9 +63,9 @@ func registerExchangeRatesRelayer(
 
 func NewServer() *Server {
 	agents := []agents.Agent{}
-	agents = registerBTCRelayerForTestNet3(agents)
-	agents = registerBNBRelayer(agents)
-	agents = registerExchangeRatesRelayer(agents)
+	agents = registerBTCRelayer(agents)
+	// agents = registerBNBRelayer(agents)
+	// agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)

@@ -35,8 +35,8 @@ func CreateAndSendTxRelayBTCHeader(client *utils.HttpClient, privateKeyStr strin
 
 	txID, err := transaction.CreateAndSendTxRelayBTCHeader(rpcClient, privateKeyStr, btcHeaderStr, btcBlockHeight, DefaultFee)
 	if err != nil {
-		fmt.Printf("Error when create and send tx relay bnb block %v\n", err)
-		return "", fmt.Errorf("Error when create and send tx relay bnb block %v\n", err)
+		fmt.Printf("Error when create and send tx relay btc block %v\n", err)
+		return "", fmt.Errorf("Error when create and send tx relay btc block %v\n", err)
 	}
 
 	return txID, nil
