@@ -15,6 +15,13 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
+const BTCBlockBatchSize = 1
+
+type btcBlockRes struct {
+	msgBlock *wire.MsgBlock
+	err      error
+}
+
 type BTCRelayer struct {
 	AgentAbs
 }
@@ -50,34 +57,6 @@ func buildBTCBlockFromCypher(cypherBlock *gobcy.Block) (*wire.MsgBlock, error) {
 	}, nil
 }
 
-// func (b *BTCRelayer) relayBTCBlockToIncognito(
-// 	btcBlockHeight int,
-// 	msgBlk *wire.MsgBlock,
-// ) error {
-// 	msgBlkBytes, err := json.Marshal(msgBlk)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	meta := map[string]interface{}{
-// 		"SenderAddress": "12S5Lrs1XeQLbqN4ySyKtjAjd2d7sBP2tjFijzmp6avrrkQCNFMpkXm3FPzj2Wcu2ZNqJEmh9JriVuRErVwhuQnLmWSaggobEWsBEci",
-// 		"Header":        base64.StdEncoding.EncodeToString(msgBlkBytes),
-// 		"BlockHeight":   btcBlockHeight,
-// 	}
-// 	privateKey := "112t8roafGgHL1rhAP9632Yef3sx5k8xgp8cwK4MCJsCL1UWcxXvpzg97N4dwvcD735iKf31Q2ZgrAvKfVjeSUEvnzKJyyJD3GqqSZdxN4or" // TODO: figure out to make it secret
-// 	params := []interface{}{
-// 		privateKey, nil, 5, -1, meta,
-// 	}
-// 	var relayingBlockRes entities.RelayingBlockRes
-// 	err = b.RPCClient.RPCCall("createandsendtxwithrelayingbtcheader", params, &relayingBlockRes)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if relayingBlockRes.RPCError != nil {
-// 		return errors.New(relayingBlockRes.RPCError.Message)
-// 	}
-// 	return nil
-// }
-
 func (b *BTCRelayer) relayBTCBlockToIncognito(
 	btcBlockHeight int64,
 	msgBlk *wire.MsgBlock,
@@ -112,6 +91,7 @@ func (b *BTCRelayer) getLatestBTCBlockHashFromIncog() (string, error) {
 func (b *BTCRelayer) Execute() {
 	fmt.Println("BTCRelayer agent is executing...")
 
+	// get latest BNB block from Incognito
 	latestBTCBlkHash, err := b.getLatestBTCBlockHashFromIncog()
 	if err != nil {
 		fmt.Printf("Could not get latest btc block hash from incognito chain - with err: %v", err)
@@ -125,27 +105,69 @@ func (b *BTCRelayer) Execute() {
 		fmt.Println("Get cypher block err: ", err)
 		return
 	}
-
 	nextBlkHeight := cypherBlock.Height + 1
+
+	blockQueue := make(chan btcBlockRes, BTCBlockBatchSize)
+	relayingResQueue := make(chan error, BTCBlockBatchSize)
+	lastCheckpoint := time.Now().UnixNano()
+	lastCheckedBlockHash := latestBTCBlkHash
 	for {
-		nextCypherBlock, err := bc.GetBlock(nextBlkHeight, "", nil)
-		if err != nil {
-			fmt.Println("Get next cypher block err: ", err)
-			break
+		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
+			i := i // create locals for closure below
+			go func() {
+				block, err := bc.GetBlock(i, "", nil)
+				if err != nil {
+					res := btcBlockRes{msgBlock: nil, err: err}
+					blockQueue <- res
+				} else {
+					btcMsgBlock, err := buildBTCBlockFromCypher(&block)
+					res := btcBlockRes{msgBlock: btcMsgBlock, err: err}
+					blockQueue <- res
+				}
+			}()
 		}
 
-		btcMsgBlock, err := buildBTCBlockFromCypher(&nextCypherBlock)
-		if err != nil {
-			fmt.Println("Build btc block from cypher block error: ", err)
-			break
+		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
+			i := i // create locals for closure below
+			go func() {
+				btcBlkRes := <-blockQueue
+				if btcBlkRes.err != nil {
+					relayingResQueue <- btcBlkRes.err
+				} else {
+					//relay next BNB block to Incognito
+					err := b.relayBTCBlockToIncognito(int64(i), btcBlkRes.msgBlock)
+					relayingResQueue <- err
+				}
+			}()
 		}
-		err = b.relayBTCBlockToIncognito(int64(nextBlkHeight), btcMsgBlock)
-		if err != nil {
-			fmt.Println("Relay btc block to incognito error: ", err)
-			break
+
+		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
+			relayingErr := <-relayingResQueue
+			if relayingErr != nil {
+				fmt.Printf("BTC relaying error: %v\n", relayingErr)
+				return
+			}
 		}
-		fmt.Printf("Relaying suceeded, Finished process for block: %s\n", btcMsgBlock.BlockHash())
-		nextBlkHeight++
+
+		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(180*time.Second).Nanoseconds() {
+			fmt.Println("Starting checking latest block height...")
+			latestBlockHash, err := b.getLatestBTCBlockHashFromIncog()
+			if err != nil {
+				fmt.Printf("getLatestBTCBlockHashFromIncog error: %v\n", err)
+				return
+			}
+			if latestBlockHash == lastCheckedBlockHash {
+				fmt.Printf("Latest btc block height on incognito chain has not increased for long time, still %s\n", latestBlockHash)
+				return
+			}
+			lastCheckpoint = time.Now().UnixNano()
+			lastCheckedBlockHash = latestBlockHash
+			fmt.Println("Finished checking latest block height.")
+		}
+
+		nextBlkHeight += BTCBlockBatchSize
+
+		// TODO: uncomment this as having defragment account's money process
 		time.Sleep(30 * time.Second)
 	}
 }

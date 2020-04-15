@@ -64,8 +64,8 @@ func registerExchangeRatesRelayer(
 func NewServer() *Server {
 	agents := []agents.Agent{}
 	agents = registerBTCRelayer(agents)
-	// agents = registerBNBRelayer(agents)
-	// agents = registerExchangeRatesRelayer(agents)
+	agents = registerBNBRelayer(agents)
+	agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)

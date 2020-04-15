@@ -5,12 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tendermint/tendermint/rpc/client"
-	"github.com/tendermint/tendermint/types"
 	"os"
 	"portalfeeders/entities"
 	"time"
+
+	"github.com/tendermint/tendermint/rpc/client"
+	"github.com/tendermint/tendermint/types"
 )
+
+const BNBBlockBatchSize = 1
+type bnbBlockRes struct {
+	blockStr string
+	err      error
+}
 
 type BNBRelayer struct {
 	AgentAbs
@@ -64,8 +71,8 @@ func (b *BNBRelayer) getBNBBlockFromBNBChain(
 	return block.Block, nil
 }
 
-func buildBNBHeaderStr (block *types.Block) (string, error) {
-	blockHeader := types.Block {
+func buildBNBHeaderStr(block *types.Block) (string, error) {
+	blockHeader := types.Block{
 		Header:     block.Header,
 		LastCommit: block.LastCommit,
 	}
@@ -77,7 +84,6 @@ func buildBNBHeaderStr (block *types.Block) (string, error) {
 	bnbHeaderStr := base64.StdEncoding.EncodeToString(bnbHeaderBytes)
 	return bnbHeaderStr, nil
 }
-
 
 func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
@@ -113,28 +119,68 @@ func (b *BNBRelayer) Execute() {
 	}
 	nextBlockHeight := latestBNBBlockHeight + 1
 
+	blockQueue := make(chan bnbBlockRes, BNBBlockBatchSize)
+	relayingResQueue := make(chan error, BNBBlockBatchSize)
+	lastCheckpoint := time.Now().UnixNano()
+	lastCheckedBlockHeight := latestBNBBlockHeight
 	for {
-		// get next BNB block from BNB chain
-		block, err := b.getBNBBlockFromBNBChain(nextBlockHeight)
-		if err != nil {
-			fmt.Printf("getBNBBlockFromBNBChain error: %v\n", err)
-			break
-		}
-		headerBlockStr, err := buildBNBHeaderStr(block)
-		if err != nil {
-			fmt.Printf("buildBNBHeaderStr error: %v\n", err)
-			break
+		for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
+			i := i // create locals for closure below
+			go func() {
+				// get next BNB block from BNB chain
+				block, err := b.getBNBBlockFromBNBChain(i)
+				if err != nil {
+					res := bnbBlockRes{blockStr: "", err: err}
+					blockQueue <- res
+				} else {
+					headerBlockStr, err := buildBNBHeaderStr(block)
+					res := bnbBlockRes{blockStr: headerBlockStr, err: err}
+					blockQueue <- res
+				}
+			}()
 		}
 
-		//relay next BNB block to Incognito
-		err = b.relayBNBBlockToIncognito(nextBlockHeight, headerBlockStr)
-		if err != nil {
-			fmt.Printf("relayBNBBlockToIncognito error: %v\n", err)
-			break
+		for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
+			i := i // create locals for closure below
+			go func() {
+				bnbBlkRes := <-blockQueue
+				if bnbBlkRes.err != nil {
+					relayingResQueue <- bnbBlkRes.err
+				} else {
+					//relay next BNB block to Incognito
+					err := b.relayBNBBlockToIncognito(i, bnbBlkRes.blockStr)
+					relayingResQueue <- err
+				}
+			}()
 		}
-		fmt.Printf("Relay bnb block header %v\n", nextBlockHeight)
 
-		nextBlockHeight++
-		time.Sleep(60 * time.Second)
+		for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
+			relayingErr := <-relayingResQueue
+			if relayingErr != nil {
+				fmt.Printf("BNB relaying error: %v\n", relayingErr)
+				return
+			}
+		}
+
+		if time.Now().UnixNano() >= lastCheckpoint + time.Duration(180 * time.Second).Nanoseconds() {
+			fmt.Println("Starting checking latest block height...")
+			latestBNBBlkHeight, err := b.getLatestBNBBlockHeightFromIncognito()
+			if err != nil {
+				fmt.Printf("getLatestBNBBlockHeightFromIncognito error: %v\n", err)
+				return
+			}
+			if latestBNBBlkHeight <= lastCheckedBlockHeight {
+				fmt.Printf("Latest bnb block height on incognito chain has not increased for long time, still %d\n", latestBNBBlkHeight)
+				return
+			}
+			lastCheckpoint = time.Now().UnixNano()
+			lastCheckedBlockHeight = latestBNBBlkHeight
+			fmt.Println("Finished checking latest block height.")
+		}
+
+		nextBlockHeight += BNBBlockBatchSize
+
+		// TODO: uncomment this as having defragment account's money process
+		time.Sleep(30 * time.Second)
 	}
 }
