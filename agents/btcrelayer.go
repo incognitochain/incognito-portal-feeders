@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"portalfeeders/entities"
@@ -90,6 +91,17 @@ func (b *BTCRelayer) getLatestBTCBlockHashFromIncog() (string, error) {
 
 func (b *BTCRelayer) Execute() {
 	fmt.Println("BTCRelayer agent is executing...")
+	// split utxos
+	if os.Getenv("SPLITUTXO") == "true" {
+		incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
+		minNumUTXOTmp := os.Getenv("NUMUTXO")
+		minNumUTXOs, _ := strconv.Atoi(minNumUTXOTmp)
+		err := SplitUTXOs(b.RPCClient, incognitoPrivateKey, minNumUTXOs)
+		if err != nil {
+			fmt.Printf("Split utxos error: %v\n", err)
+			return
+		}
+	}
 
 	// get latest BNB block from Incognito
 	latestBTCBlkHash, err := b.getLatestBTCBlockHashFromIncog()

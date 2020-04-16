@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/0xkraken/incognito-sdk-golang/transaction"
 	"os"
 	"portalfeeders/entities"
+	"strconv"
 	"time"
 
 	"github.com/tendermint/tendermint/rpc/client"
 	"github.com/tendermint/tendermint/types"
 )
 
-const BNBBlockBatchSize = 1
+const BNBBlockBatchSize = 10
 type bnbBlockRes struct {
 	blockStr string
 	err      error
@@ -89,12 +91,14 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
 	headerBlockStr string,
 ) error {
-	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
+	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY_BNB_RELAYER")
 	txID, err := CreateAndSendTxRelayBNBHeader(b.RPCClient, incognitoPrivateKey, headerBlockStr, bnbBlockHeight)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("relayBNBBlockToIncognito success with TxID: %v\n", txID)
+
+	fmt.Printf("Cache: %v\n", transaction.GetUTXOCaches())
+	fmt.Printf("relayBNBBlockToIncognito success blockHeight %v with TxID: %v\n", bnbBlockHeight, txID)
 
 	return nil
 }
@@ -110,6 +114,18 @@ func (b *BNBRelayer) getServerAddress() string {
 
 func (b *BNBRelayer) Execute() {
 	fmt.Println("BNBRelayer agent is executing...")
+
+	// split utxos
+	if os.Getenv("SPLITUTXO") == "true" {
+		incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY_BNB_RELAYER")
+		minNumUTXOTmp := os.Getenv("NUMUTXO")
+		minNumUTXOs, _ := strconv.Atoi(minNumUTXOTmp)
+		err := SplitUTXOs(b.RPCClient, incognitoPrivateKey, minNumUTXOs)
+		if err != nil {
+			fmt.Printf("Split utxos error: %v\n", err)
+			return
+		}
+	}
 
 	// get latest BNB block from Incognito
 	latestBNBBlockHeight, err := b.getLatestBNBBlockHeightFromIncognito()
