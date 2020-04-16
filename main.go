@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/tendermint/tendermint/rpc/client"
 	"os"
 	"os/signal"
 	"portalfeeders/agents"
@@ -38,10 +39,11 @@ func registerBNBRelayer(
 	bnbR := &agents.BNBRelayer{}
 	bnbR.ID = 2
 	bnbR.Name = "Binance chain relayer"
-	bnbR.Frequency = 60
+	bnbR.Frequency = 10
 	bnbR.Quit = make(chan bool)
 	bnbR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	bnbR.Network = "test" // bnb network name
+	bnbR.BNBClient = client.NewHTTP(bnbR.GetServerAddress(), "/websocket")
 	return append(agentsList, bnbR)
 }
 
@@ -63,9 +65,9 @@ func registerExchangeRatesRelayer(
 
 func NewServer() *Server {
 	agents := []agents.Agent{}
-	agents = registerBTCRelayer(agents)
+	//agents = registerBTCRelayer(agents)
 	agents = registerBNBRelayer(agents)
-	agents = registerExchangeRatesRelayer(agents)
+	//agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)

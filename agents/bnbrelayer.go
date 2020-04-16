@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/0xkraken/incognito-sdk-golang/transaction"
 	"os"
 	"portalfeeders/entities"
 	"strconv"
@@ -15,14 +14,17 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-const BNBBlockBatchSize = 10
+const BNBBlockBatchSize = 3
+
 type bnbBlockRes struct {
-	blockStr string
-	err      error
+	blockStr    string
+	blockHeight int64
+	err         error
 }
 
 type BNBRelayer struct {
 	AgentAbs
+	BNBClient *client.HTTP
 }
 
 func (b *BNBRelayer) getLatestBNBBlockHeightFromIncognito() (int64, error) {
@@ -58,11 +60,7 @@ func (b *BNBRelayer) getLatestBNBBlockHeightFromIncognito() (int64, error) {
 func (b *BNBRelayer) getBNBBlockFromBNBChain(
 	bnbBlockHeight int64,
 ) (*types.Block, error) {
-	serverAddress := b.getServerAddress()
-	client := client.NewHTTP(serverAddress, "/websocket")
-	client.Start()
-	defer client.Stop()
-	block, err := client.Block(&bnbBlockHeight)
+	block, err := b.BNBClient.Block(&bnbBlockHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -97,13 +95,12 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 		return err
 	}
 
-	fmt.Printf("Cache: %v\n", transaction.GetUTXOCaches())
 	fmt.Printf("relayBNBBlockToIncognito success blockHeight %v with TxID: %v\n", bnbBlockHeight, txID)
 
 	return nil
 }
 
-func (b *BNBRelayer) getServerAddress() string {
+func (b *BNBRelayer) GetServerAddress() string {
 	if b.GetNetwork() == "main" {
 		return os.Getenv("BNB_MAINNET_ADDRESS")
 	} else if b.GetNetwork() == "test" {
@@ -146,25 +143,25 @@ func (b *BNBRelayer) Execute() {
 				// get next BNB block from BNB chain
 				block, err := b.getBNBBlockFromBNBChain(i)
 				if err != nil {
-					res := bnbBlockRes{blockStr: "", err: err}
+					res := bnbBlockRes{blockStr: "", blockHeight: i, err: err}
 					blockQueue <- res
 				} else {
 					headerBlockStr, err := buildBNBHeaderStr(block)
-					res := bnbBlockRes{blockStr: headerBlockStr, err: err}
+					res := bnbBlockRes{blockStr: headerBlockStr, blockHeight: i, err: err}
 					blockQueue <- res
 				}
 			}()
 		}
 
 		for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
-			i := i // create locals for closure below
+			_ = i // create locals for closure below
 			go func() {
 				bnbBlkRes := <-blockQueue
 				if bnbBlkRes.err != nil {
 					relayingResQueue <- bnbBlkRes.err
 				} else {
 					//relay next BNB block to Incognito
-					err := b.relayBNBBlockToIncognito(i, bnbBlkRes.blockStr)
+					err := b.relayBNBBlockToIncognito(bnbBlkRes.blockHeight, bnbBlkRes.blockStr)
 					relayingResQueue <- err
 				}
 			}()
@@ -178,7 +175,7 @@ func (b *BNBRelayer) Execute() {
 			}
 		}
 
-		if time.Now().UnixNano() >= lastCheckpoint + time.Duration(180 * time.Second).Nanoseconds() {
+		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(180*time.Second).Nanoseconds() {
 			fmt.Println("Starting checking latest block height...")
 			latestBNBBlkHeight, err := b.getLatestBNBBlockHeightFromIncognito()
 			if err != nil {
@@ -190,13 +187,11 @@ func (b *BNBRelayer) Execute() {
 				return
 			}
 			lastCheckpoint = time.Now().UnixNano()
-			lastCheckedBlockHeight = latestBNBBlkHeight
+			// assign lastCheckedBlockHeight = nextBlockHeight, instead of latestBNBBlkHeight, help to detect wrong batch sooner.
+			lastCheckedBlockHeight = nextBlockHeight
 			fmt.Println("Finished checking latest block height.")
 		}
 
 		nextBlockHeight += BNBBlockBatchSize
-
-		// TODO: uncomment this as having defragment account's money process
-		time.Sleep(30 * time.Second)
 	}
 }
