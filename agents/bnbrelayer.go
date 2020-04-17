@@ -180,6 +180,6 @@ func (b *BNBRelayer) Execute() {
 		}
 
 		nextBlockHeight += BNBBlockBatchSize
-		time.Sleep(10 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 }
