@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/tendermint/tendermint/rpc/client"
 	"os"
 	"os/signal"
 	"portalfeeders/agents"
@@ -11,6 +10,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/tendermint/tendermint/rpc/client"
 
 	"github.com/joho/godotenv"
 )
@@ -43,7 +44,7 @@ func registerBNBRelayer(
 	bnbR.Frequency = 10
 	bnbR.Quit = make(chan bool)
 	bnbR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-	bnbR.Network = "test" // bnb network name
+	bnbR.Network = "test"                                                                                                               // bnb network name
 	bnbR.BNBClient, _ = client.NewHTTP(bnbR.GetServerAddress(), "/websocket")
 	return append(agentsList, bnbR)
 }

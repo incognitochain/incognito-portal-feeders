@@ -13,7 +13,7 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-const BNBBlockBatchSize = 10
+const BNBBlockBatchSize = 5
 
 type bnbBlockRes struct {
 	blockStr    string
