@@ -171,6 +171,6 @@ func (b *BTCRelayer) Execute() {
 		nextBlkHeight += BTCBlockBatchSize
 
 		// TODO: uncomment this as having defragment account's money process
-		//time.Sleep(30 * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 }
