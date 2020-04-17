@@ -127,8 +127,10 @@ func (b *BTCRelayer) Execute() {
 			}()
 		}
 
+		sem := make(chan struct{}, BTCBlockBatchSize)
 		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
 			i := i // create locals for closure below
+			sem <- struct{}{}
 			go func() {
 				btcBlkRes := <-blockQueue
 				if btcBlkRes.err != nil {
@@ -138,6 +140,7 @@ func (b *BTCRelayer) Execute() {
 					err := b.relayBTCBlockToIncognito(int64(i), btcBlkRes.msgBlock)
 					relayingResQueue <- err
 				}
+				<-sem
 			}()
 		}
 

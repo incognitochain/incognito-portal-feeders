@@ -193,4 +193,6 @@ func (b *ExchangeRatesRelayer) Execute() {
 	if err != nil {
 		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
 	}
+
+	fmt.Println("ExchangeRatesRelayer agent finished...")
 }
