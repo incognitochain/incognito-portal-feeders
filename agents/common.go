@@ -53,3 +53,17 @@ func CreateAndSendTxPortalExchangeRate(client *utils.HttpClient, privateKeyStr s
 
 	return txID, nil
 }
+
+// number of blocks per year: 3*60*60*24*365 = 94608000
+// PRV fee for BNB relayer in 10 years: 94608000 * 10 * 20 = 18921600000 ~ 20 PRV + 10 PRV (extra)
+func SplitUTXOs(client *utils.HttpClient, privateKeyStr string, numUTXOs int) error {
+	rpcClient := rpcclient.NewHttpClient(client.GetURL(), "", "", 0)
+
+	err := transaction.SplitUTXOs(rpcClient, privateKeyStr, numUTXOs)
+	if err != nil {
+		fmt.Printf("Error when split utxos %v\n", err)
+		return err
+	}
+
+	return nil
+}
