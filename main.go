@@ -44,7 +44,7 @@ func registerBNBRelayer(
 	bnbR.Quit = make(chan bool)
 	bnbR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	bnbR.Network = "test" // bnb network name
-	bnbR.BNBClient = client.NewHTTP(bnbR.GetServerAddress(), "/websocket")
+	bnbR.BNBClient, _ = client.NewHTTP(bnbR.GetServerAddress(), "/websocket")
 	return append(agentsList, bnbR)
 }
 
