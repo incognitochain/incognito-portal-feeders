@@ -7,14 +7,13 @@ import (
 	"fmt"
 	"os"
 	"portalfeeders/entities"
-	"strconv"
 	"time"
 
 	"github.com/tendermint/tendermint/rpc/client"
 	"github.com/tendermint/tendermint/types"
 )
 
-const BNBBlockBatchSize = 3
+const BNBBlockBatchSize = 10
 
 type bnbBlockRes struct {
 	blockStr    string
@@ -89,7 +88,7 @@ func (b *BNBRelayer) relayBNBBlockToIncognito(
 	bnbBlockHeight int64,
 	headerBlockStr string,
 ) error {
-	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY_BNB_RELAYER")
+	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
 	txID, err := CreateAndSendTxRelayBNBHeader(b.RPCClient, incognitoPrivateKey, headerBlockStr, bnbBlockHeight)
 	if err != nil {
 		return err
@@ -111,18 +110,6 @@ func (b *BNBRelayer) GetServerAddress() string {
 
 func (b *BNBRelayer) Execute() {
 	fmt.Println("BNBRelayer agent is executing...")
-
-	// split utxos
-	if os.Getenv("SPLITUTXO") == "true" {
-		incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY_BNB_RELAYER")
-		minNumUTXOTmp := os.Getenv("NUMUTXO")
-		minNumUTXOs, _ := strconv.Atoi(minNumUTXOTmp)
-		err := SplitUTXOs(b.RPCClient, incognitoPrivateKey, minNumUTXOs)
-		if err != nil {
-			fmt.Printf("Split utxos error: %v\n", err)
-			return
-		}
-	}
 
 	// get latest BNB block from Incognito
 	latestBNBBlockHeight, err := b.getLatestBNBBlockHeightFromIncognito()
@@ -175,7 +162,7 @@ func (b *BNBRelayer) Execute() {
 			}
 		}
 
-		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(180*time.Second).Nanoseconds() {
+		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(120*time.Second).Nanoseconds() {
 			fmt.Println("Starting checking latest block height...")
 			latestBNBBlkHeight, err := b.getLatestBNBBlockHeightFromIncognito()
 			if err != nil {
