@@ -13,7 +13,7 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-const BNBBlockBatchSize = 5
+const BNBBlockBatchSize = 3
 
 type bnbBlockRes struct {
 	blockStr    string
@@ -162,7 +162,7 @@ func (b *BNBRelayer) Execute() {
 			}
 		}
 
-		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(120*time.Second).Nanoseconds() {
+		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(100*time.Second).Nanoseconds() {
 			fmt.Println("Starting checking latest block height...")
 			latestBNBBlkHeight, err := b.getLatestBNBBlockHeightFromIncognito()
 			if err != nil {
@@ -180,5 +180,6 @@ func (b *BNBRelayer) Execute() {
 		}
 
 		nextBlockHeight += BNBBlockBatchSize
+		time.Sleep(10 * time.Second)
 	}
 }
