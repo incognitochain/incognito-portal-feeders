@@ -47,7 +47,6 @@ func CreateAndSendTxPortalExchangeRate(client *utils.HttpClient, privateKeyStr s
 
 	txID, err := transaction.CreateAndSendTxPortalExchangeRate(rpcClient, privateKeyStr, exchangeRateParam, DefaultFee)
 	if err != nil {
-		fmt.Printf("Error when create and send tx exchange rate %v\n", err)
 		return "", fmt.Errorf("Error when create and send tx exchange rate %v\n", err)
 	}
 
