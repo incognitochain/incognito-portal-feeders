@@ -13,7 +13,7 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-const BNBBlockBatchSize = 2
+const BNBBlockBatchSize = 10
 
 type bnbBlockRes struct {
 	blockStr    string
@@ -40,19 +40,8 @@ func (b *BNBRelayer) getLatestBNBBlockHeightFromIncognito() (int64, error) {
 		return int64(0), errors.New(relayingBlockRes.RPCError.Message)
 	}
 
-	res := relayingBlockRes.Result.(map[string]interface{})
-	latestBNBHeaderBlockHeight, ok := res["LatestBNBHeaderBlockHeight"]
-	if !ok {
-		fmt.Errorf("Can not get LatestBNBHeaderBlockHeight in response")
-		return int64(0), errors.New("Can not get LatestBNBHeaderBlockHeight in response")
-	}
-	latestBNBHeaderBlockHeightFloat64, ok := latestBNBHeaderBlockHeight.(float64)
-	if !ok {
-		fmt.Errorf("Can not get latestBNBHeaderBlockHeightFloat64 in response")
-		return int64(0), errors.New("Can not get latestBNBHeaderBlockHeightFloat64 in response")
-	}
-
-	return int64(latestBNBHeaderBlockHeightFloat64), nil
+	res := relayingBlockRes.Result.(float64)
+	return int64(res), nil
 }
 
 // getBNBBlockFromBNBChain calls RPC to get bnb block with blockHeight from BNB peers
@@ -162,7 +151,7 @@ func (b *BNBRelayer) Execute() {
 			}
 		}
 
-		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(70*time.Second).Nanoseconds() {
+		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(120*time.Second).Nanoseconds() {
 			fmt.Println("Starting checking latest block height...")
 			latestBNBBlkHeight, err := b.getLatestBNBBlockHeightFromIncognito()
 			if err != nil {
@@ -180,6 +169,6 @@ func (b *BNBRelayer) Execute() {
 		}
 
 		nextBlockHeight += BNBBlockBatchSize
-		// time.Sleep(2 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 }
