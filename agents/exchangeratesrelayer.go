@@ -180,12 +180,10 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 
 func (b *ExchangeRatesRelayer) Execute() {
 	fmt.Println("ExchangeRatesRelayer agent is executing...")
-	/*prvRate, err := b.getPRVRate()
+	prvRate, err := b.getPRVRate()
 	if err != nil {
 		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
-	}*/
-
-	prvRate := uint64(0)
+	}
 
 	btcPrice, err := b.getPublicTokenRates(BTCSymbol)
 	if err != nil {
