@@ -16,44 +16,29 @@ type ExchangeRatesRelayer struct {
 	RestfulClient *utils.RestfulClient
 }
 
-type Price struct {
-	Price       float64
-	LastUpdated string
+type PriceItem struct {
+	Symbol string
+	Price  string
 }
 
-type CoinMarketCapQuotesLatestItem struct {
-	Id    int64
-	Name  string
-	Quote map[string]*Price
-}
-
-type CoinMarketCapQuotesLatest struct {
-	Data map[string]*CoinMarketCapQuotesLatestItem
-}
-
-func (b *ExchangeRatesRelayer) getPublicTokenRates() (CoinMarketCapQuotesLatest, error) {
-	//get price from CoinMarketCap
-	header := map[string]string{
-		"X-CMC_PRO_API_KEY": os.Getenv("COINMARKETCAP_KEY"),
+func (b *ExchangeRatesRelayer) getPublicTokenRates(symbol string) (PriceItem, error) {
+	symbolFilter := map[string]string {
+		"symbol": symbol,
 	}
 
-	filter := map[string]string{
-		"id": CrytoFilterID,
-	}
-
-	result, err := b.RestfulClient.Get("cryptocurrency/quotes/latest", header, filter)
+	result, err := b.RestfulClient.Get("/ticker/price", nil, symbolFilter)
 	if err != nil {
-		return CoinMarketCapQuotesLatest{}, err
+		return PriceItem{}, err
 	}
 
-	var coinMarketCapQuotesLatest CoinMarketCapQuotesLatest
-	err = json.Unmarshal(result, &coinMarketCapQuotesLatest)
+	var priceItems PriceItem
+	err = json.Unmarshal(result, &priceItems)
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error when unmarshal CoinMarketCapQuotesLatest, %v\n", err)
-		return CoinMarketCapQuotesLatest{}, errors.New("ExchangeRatesRelayer: has a error when unmarshal CoinMarketCapQuotesLatest")
+		fmt.Printf("ExchangeRatesRelayer: has a error when unmarshal, %v\n", err)
+		return PriceItem{}, errors.New("ExchangeRatesRelayer: has a error when unmarshal")
 	}
 
-	return coinMarketCapQuotesLatest, nil
+	return priceItems, nil
 }
 
 func (b *ExchangeRatesRelayer) getLatestBeaconHeight() (uint64, error) {
@@ -129,35 +114,53 @@ func (b *ExchangeRatesRelayer) getPRVRate() (uint64, error) {
 	return tokenPoolValueToBuy - newTokenPoolValueToBuy, nil
 }
 
-func convertPublicTokenPriceToPToken(price float64) uint64 {
-	result := price * math.Pow10(6)
-	roundUp := uint64(math.Ceil(result))
-	fmt.Printf("ExchangeRatesRelayer: Convert public token to pToken, price: %+v, result %+v, round up: %+v\n", price, result, roundUp)
-	return roundUp
+func convertPublicTokenPriceToPToken(price *big.Float) uint64 {
+	var e6 = new(big.Float).SetFloat64(math.Pow10(6))
+	mul := new(big.Float).Mul(price, e6)
+
+	result := new(big.Int)
+	mul.Int(result)
+
+	fmt.Printf("ExchangeRatesRelayer: Convert public token to pToken, price: %+v, result %+v\n", price.String(), result.Uint64())
+
+	return result.Uint64()
 }
 
 func (b *ExchangeRatesRelayer) pushExchangeRates(
-	coinMarketCapQuotesLatest CoinMarketCapQuotesLatest,
+	btcPrice PriceItem,
+	bnbPrice PriceItem,
 	prvRate uint64,
 ) error {
 	rates := make(map[string]uint64)
+
+	//fill data
 	if prvRate > 0 {
 		rates[PRVID] = prvRate
 	}
 
-	for _, value := range coinMarketCapQuotesLatest.Data {
-		if value.Quote["USD"] == nil {
-			continue
+	if len(btcPrice.Price) > 0 {
+		price := new(big.Float)
+		price, ok := price.SetString(btcPrice.Price)
+
+		if !ok {
+			fmt.Println("SetString: BTC error")
 		}
 
-		if converted := convertPublicTokenPriceToPToken(value.Quote["USD"].Price); converted > 0 {
-			if value.Id == BTCCoinMarketCapID {
-				rates[BTCID] = converted
-			}
+		if converted := convertPublicTokenPriceToPToken(price); ok && converted > 0 {
+			rates[BTCID] = converted
+		}
+	}
 
-			if value.Id == BNBCoinMarketCapID {
-				rates[BNBID] = converted
-			}
+	if len(bnbPrice.Price) > 0 {
+		price := new(big.Float)
+		price, ok := price.SetString(bnbPrice.Price)
+
+		if !ok {
+			fmt.Println("SetString: BNB error")
+		}
+
+		if converted := convertPublicTokenPriceToPToken(price); converted > 0 {
+			rates[BNBID] = converted
 		}
 	}
 
@@ -177,19 +180,24 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 
 func (b *ExchangeRatesRelayer) Execute() {
 	fmt.Println("ExchangeRatesRelayer agent is executing...")
-	coinMarketCapQuotesLatest, err := b.getPublicTokenRates()
+	/*prvRate, err := b.getPRVRate()
+	if err != nil {
+		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
+	}*/
+
+	prvRate := uint64(0)
+
+	btcPrice, err := b.getPublicTokenRates(BTCSymbol)
 	if err != nil {
 		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
 	}
 
-	fmt.Println(coinMarketCapQuotesLatest)
-
-	prvRate, err := b.getPRVRate()
+	bnbPrice, err := b.getPublicTokenRates(BNBSymbol)
 	if err != nil {
 		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
 	}
 
-	err = b.pushExchangeRates(coinMarketCapQuotesLatest, prvRate)
+	err = b.pushExchangeRates(btcPrice, bnbPrice, prvRate)
 	if err != nil {
 		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
 	}

@@ -66,6 +66,7 @@ func (client *HttpClient) RPCCall(
 		fmt.Println("calling err: ", err)
 		return err
 	}
+
 	respBody := resp.Body
 	defer respBody.Close()
 

@@ -52,7 +52,7 @@ func registerBNBRelayer(
 func registerExchangeRatesRelayer(
 	agentsList []agents.Agent,
 ) []agents.Agent {
-	restfulClient := utils.NewRestfulClient(os.Getenv("COINMARKETCAP_HOST"), os.Getenv("COINMARKETCAP_VERSION"))
+	restfulClient := utils.NewRestfulClient(os.Getenv("BINNANCE_HOST"), os.Getenv("BINNANCE_VERSION"))
 
 	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
@@ -122,6 +122,14 @@ func main() {
 	if err != nil {
 		panic("Error loading .env file")
 	}
+
+	var myEnv map[string]string
+	myEnv, _ = godotenv.Read()
+	fmt.Println("=========Config============")
+	for key, value := range myEnv {
+		fmt.Println(key + ": " + value)
+	}
+	fmt.Println("=========End============")
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	s := NewServer()
