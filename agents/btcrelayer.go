@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"portalfeeders/entities"
+	"portalfeeders/utils"
 
 	"github.com/blockcypher/gobcy"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -18,12 +19,14 @@ import (
 const BTCBlockBatchSize = 1
 
 type btcBlockRes struct {
-	msgBlock *wire.MsgBlock
-	err      error
+	msgBlock    *wire.MsgBlock
+	blockHeight int64
+	err         error
 }
 
 type BTCRelayer struct {
 	AgentAbs
+	BeaconRPCClient *utils.HttpClient
 }
 
 func getBlockCypherAPI(networkName string) gobcy.API {
@@ -78,7 +81,7 @@ func (b *BTCRelayer) relayBTCBlockToIncognito(
 func (b *BTCRelayer) getLatestBTCBlockHashFromIncog() (string, error) {
 	params := []interface{}{}
 	var btcRelayingBestStateRes entities.BTCRelayingBestStateRes
-	err := b.RPCClient.RPCCall("getbtcrelayingbeststate", params, &btcRelayingBestStateRes)
+	err := b.BeaconRPCClient.RPCCall("getbtcrelayingbeststate", params, &btcRelayingBestStateRes)
 	if err != nil {
 		return "", err
 	}
@@ -117,11 +120,11 @@ func (b *BTCRelayer) Execute() {
 			go func() {
 				block, err := bc.GetBlock(i, "", nil)
 				if err != nil {
-					res := btcBlockRes{msgBlock: nil, err: err}
+					res := btcBlockRes{msgBlock: nil, blockHeight: int64(0), err: err}
 					blockQueue <- res
 				} else {
 					btcMsgBlock, err := buildBTCBlockFromCypher(&block)
-					res := btcBlockRes{msgBlock: btcMsgBlock, err: err}
+					res := btcBlockRes{msgBlock: btcMsgBlock, blockHeight: int64(i), err: err}
 					blockQueue <- res
 				}
 			}()
@@ -129,7 +132,7 @@ func (b *BTCRelayer) Execute() {
 
 		sem := make(chan struct{}, BTCBlockBatchSize)
 		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
-			i := i // create locals for closure below
+			// i := i // create locals for closure below
 			sem <- struct{}{}
 			go func() {
 				btcBlkRes := <-blockQueue
@@ -137,7 +140,7 @@ func (b *BTCRelayer) Execute() {
 					relayingResQueue <- btcBlkRes.err
 				} else {
 					//relay next BNB block to Incognito
-					err := b.relayBTCBlockToIncognito(int64(i), btcBlkRes.msgBlock)
+					err := b.relayBTCBlockToIncognito(btcBlkRes.blockHeight, btcBlkRes.msgBlock)
 					relayingResQueue <- err
 				}
 				<-sem

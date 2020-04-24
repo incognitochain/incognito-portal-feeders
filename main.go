@@ -31,6 +31,7 @@ func registerBTCRelayer(
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
+	btcR.BeaconRPCClient = utils.NewHttpClient("", os.Getenv("BEACON_INCOGNITO_PROTOCOL"), os.Getenv("BEACON_INCOGNITO_HOST"), os.Getenv("BEACON_INCOGNITO_PORT")) // incognito chain rpc endpoint
 	btcR.Network = os.Getenv("BTC_NETWORK")                                                                                             // btc network name
 	return append(agentsList, btcR)
 }
