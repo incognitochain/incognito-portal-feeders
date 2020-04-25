@@ -31,6 +31,7 @@ func registerBTCRelayer(
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
+	btcR.BeaconRPCClient = utils.NewHttpClient("", os.Getenv("BEACON_INCOGNITO_PROTOCOL"), os.Getenv("BEACON_INCOGNITO_HOST"), os.Getenv("BEACON_INCOGNITO_PORT")) // incognito chain rpc endpoint
 	btcR.Network = os.Getenv("BTC_NETWORK")                                                                                             // btc network name
 	return append(agentsList, btcR)
 }
@@ -52,7 +53,7 @@ func registerBNBRelayer(
 func registerExchangeRatesRelayer(
 	agentsList []agents.Agent,
 ) []agents.Agent {
-	restfulClient := utils.NewRestfulClient(os.Getenv("COINMARKETCAP_HOST"), os.Getenv("COINMARKETCAP_VERSION"))
+	restfulClient := utils.NewRestfulClient(os.Getenv("BINNANCE_HOST"), os.Getenv("BINNANCE_VERSION"))
 
 	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
@@ -122,6 +123,14 @@ func main() {
 	if err != nil {
 		panic("Error loading .env file")
 	}
+
+	var myEnv map[string]string
+	myEnv, _ = godotenv.Read()
+	fmt.Println("=========Config============")
+	for key, value := range myEnv {
+		fmt.Println(key + ": " + value)
+	}
+	fmt.Println("=========End============")
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	s := NewServer()
