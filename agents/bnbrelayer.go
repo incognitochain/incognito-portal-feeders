@@ -108,38 +108,61 @@ func (b *BNBRelayer) Execute() {
 	}
 	nextBlockHeight := latestBNBBlockHeight + 1
 
-	blockQueue := make(chan bnbBlockRes, BNBBlockBatchSize)
+	//blockQueue := make(chan bnbBlockRes, BNBBlockBatchSize)
 	relayingResQueue := make(chan error, BNBBlockBatchSize)
 	lastCheckpoint := time.Now().UnixNano()
 	lastCheckedBlockHeight := latestBNBBlockHeight
 	for {
+		//for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
+		//	i := i // create locals for closure below
+		//	go func() {
+		//		// get next BNB block from BNB chain
+		//		block, err := b.getBNBBlockFromBNBChain(i)
+		//		if err != nil {
+		//			res := bnbBlockRes{blockStr: "", blockHeight: i, err: err}
+		//			blockQueue <- res
+		//		} else {
+		//			headerBlockStr, err := buildBNBHeaderStr(block)
+		//			res := bnbBlockRes{blockStr: headerBlockStr, blockHeight: i, err: err}
+		//			blockQueue <- res
+		//		}
+		//	}()
+		//}
+		//
+		//for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
+		//	_ = i // create locals for closure below
+		//	go func() {
+		//		bnbBlkRes := <-blockQueue
+		//		if bnbBlkRes.err != nil {
+		//			relayingResQueue <- bnbBlkRes.err
+		//		} else {
+		//			//relay next BNB block to Incognito
+		//			err := b.relayBNBBlockToIncognito(bnbBlkRes.blockHeight, bnbBlkRes.blockStr)
+		//			relayingResQueue <- err
+		//		}
+		//	}()
+		//}
+		//
+
 		for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
 			i := i // create locals for closure below
 			go func() {
 				// get next BNB block from BNB chain
 				block, err := b.getBNBBlockFromBNBChain(i)
 				if err != nil {
-					res := bnbBlockRes{blockStr: "", blockHeight: i, err: err}
-					blockQueue <- res
+					relayingResQueue <- err
 				} else {
 					headerBlockStr, err := buildBNBHeaderStr(block)
-					res := bnbBlockRes{blockStr: headerBlockStr, blockHeight: i, err: err}
-					blockQueue <- res
+					if err != nil {
+						relayingResQueue <- err
+					} else {
+						err = b.relayBNBBlockToIncognito(i, headerBlockStr)
+						if err != nil {
+							relayingResQueue <- err
+						}
+					}
 				}
-			}()
-		}
-
-		for i := nextBlockHeight; i < nextBlockHeight+BNBBlockBatchSize; i++ {
-			_ = i // create locals for closure below
-			go func() {
-				bnbBlkRes := <-blockQueue
-				if bnbBlkRes.err != nil {
-					relayingResQueue <- bnbBlkRes.err
-				} else {
-					//relay next BNB block to Incognito
-					err := b.relayBNBBlockToIncognito(bnbBlkRes.blockHeight, bnbBlkRes.blockStr)
-					relayingResQueue <- err
-				}
+				relayingResQueue <- nil
 			}()
 		}
 
@@ -151,7 +174,7 @@ func (b *BNBRelayer) Execute() {
 			}
 		}
 
-		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(120*time.Second).Nanoseconds() {
+		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(180*time.Second).Nanoseconds() {
 			fmt.Println("Starting checking latest block height...")
 			latestBNBBlkHeight, err := b.getLatestBNBBlockHeightFromIncognito()
 			if err != nil {
@@ -169,6 +192,6 @@ func (b *BNBRelayer) Execute() {
 		}
 
 		nextBlockHeight += BNBBlockBatchSize
-		time.Sleep(2 * time.Second)
+		//time.Sleep(2*time.Second)
 	}
 }
