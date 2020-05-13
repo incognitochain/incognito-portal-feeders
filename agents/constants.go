@@ -2,7 +2,7 @@ package agents
 
 const (
 	// DefaultFee - default fee
-	DefaultFee = 20
+	DefaultFee = 570000000
 
 	// DefaultExecuteDuration - default execute duration
 	DefaultExecuteDuration = 100

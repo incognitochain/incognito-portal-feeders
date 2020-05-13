@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"portalfeeders/agents"
 	"portalfeeders/utils"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 	"github.com/tendermint/tendermint/rpc/client"
 
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 )
 
 type Server struct {
@@ -22,17 +24,37 @@ type Server struct {
 	agents []agents.Agent
 }
 
+func instantiateLogger(workerName string) (*logrus.Entry, error) {
+	var log = logrus.New()
+	logsPath := filepath.Join(".", "logs")
+	os.MkdirAll(logsPath, os.ModePerm)
+	file, err := os.OpenFile(fmt.Sprintf("%s/%s.log", logsPath, workerName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Infof("Failed to log to file - with error: %v", err)
+		return nil, err
+	}
+	log.Out = file
+	logger := log.WithFields(logrus.Fields{
+		"worker": workerName,
+	})
+	return logger, nil
+}
+
 func registerBTCRelayer(
 	agentsList []agents.Agent,
 ) []agents.Agent {
 	btcR := &agents.BTCRelayer{}
 	btcR.ID = 1
-	btcR.Name = "Bitcoin relayer"
+	btcR.Name = "bitcoin-relayer"
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
 	btcR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-	btcR.BeaconRPCClient = utils.NewHttpClient("", os.Getenv("BEACON_INCOGNITO_PROTOCOL"), os.Getenv("BEACON_INCOGNITO_HOST"), os.Getenv("BEACON_INCOGNITO_PORT")) // incognito chain rpc endpoint
 	btcR.Network = os.Getenv("BTC_NETWORK")                                                                                             // btc network name
+	logger, err := instantiateLogger(btcR.Name)
+	if err != nil {
+		panic("Could instantiate a logger for bitcoin relayer")
+	}
+	btcR.Logger = logger
 	return append(agentsList, btcR)
 }
 
@@ -57,20 +79,25 @@ func registerExchangeRatesRelayer(
 
 	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
-	exchangeRates.Name = "Exchange rates relayer"
+	exchangeRates.Name = "exchange-rates-relayer"
 	exchangeRates.Frequency = 30
 	exchangeRates.Quit = make(chan bool)
 	exchangeRates.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	exchangeRates.RestfulClient = restfulClient
 	exchangeRates.Network = "main"
+	logger, err := instantiateLogger(exchangeRates.Name)
+	if err != nil {
+		panic("Could instantiate a logger for exchange rates relayer")
+	}
+	exchangeRates.Logger = logger
 	return append(agentsList, exchangeRates)
 }
 
 func NewServer() *Server {
 	agents := []agents.Agent{}
 	agents = registerBTCRelayer(agents)
-	agents = registerBNBRelayer(agents)
-	agents = registerExchangeRatesRelayer(agents)
+	// agents = registerBNBRelayer(agents)
+	// agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)

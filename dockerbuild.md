@@ -1,11 +1,11 @@
 ###Build dockerfile
 ```
-$ docker build -t portalfeeders . 
+$ docker build -t portalfeeders .
 ```
 
 ###Docker run with default environment
 ```
-$ docker run --name portal-feeders portalfeeders 
+$ docker run -v ${PWD}/logs:/go/src/app/logs -d --name portal-feeders portalfeeders
 ```
 
 ###Docker run with environment

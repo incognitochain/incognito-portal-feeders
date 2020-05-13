@@ -3,6 +3,8 @@ package agents
 import (
 	"fmt"
 	"portalfeeders/utils"
+
+	"github.com/sirupsen/logrus"
 )
 
 type AgentAbs struct {
@@ -12,6 +14,7 @@ type AgentAbs struct {
 	Quit      chan bool
 	RPCClient *utils.HttpClient
 	Network   string // mainnet, testnet, ...
+	Logger    *logrus.Entry
 }
 
 type Agent interface {

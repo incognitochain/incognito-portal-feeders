@@ -46,9 +46,6 @@ func (client *HttpClient) RPCCall(
 	rpcEndpoint := buildHttpServerAddress(
 		client.url, client.protocol, client.host, client.port,
 	)
-
-	fmt.Println("rpcEndpoint: ", rpcEndpoint)
-
 	payload := map[string]interface{}{
 		"method": method,
 		"params": params,

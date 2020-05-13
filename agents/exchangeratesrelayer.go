@@ -34,7 +34,7 @@ func (b *ExchangeRatesRelayer) getPublicTokenRates(symbol string) (PriceItem, er
 	var priceItems PriceItem
 	err = json.Unmarshal(result, &priceItems)
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error when unmarshal, %v\n", err)
+		b.Logger.Errorf("ExchangeRatesRelayer: has a error when unmarshal, %v\n", err)
 		return PriceItem{}, errors.New("ExchangeRatesRelayer: has a error when unmarshal")
 	}
 
@@ -50,7 +50,7 @@ func (b *ExchangeRatesRelayer) getLatestBeaconHeight() (uint64, error) {
 	}
 
 	if beaconBestStateRes.RPCError != nil {
-		fmt.Printf("getLatestBeaconHeight: call RPC error, %v\n", beaconBestStateRes.RPCError.StackTrace)
+		b.Logger.Errorf("getLatestBeaconHeight: call RPC error, %v\n", beaconBestStateRes.RPCError.StackTrace)
 		return 0, errors.New(beaconBestStateRes.RPCError.Message)
 	}
 	return beaconBestStateRes.Result.BeaconHeight, nil
@@ -69,7 +69,7 @@ func (b *ExchangeRatesRelayer) getPDEState(beaconHeight uint64) (*entities.PDESt
 	}
 
 	if pdeStateRes.RPCError != nil {
-		fmt.Printf("getPDEState: call RPC error, %v\n", pdeStateRes.RPCError.StackTrace)
+		b.Logger.Errorf("getPDEState: call RPC error, %v\n", pdeStateRes.RPCError.StackTrace)
 		return nil, errors.New(pdeStateRes.RPCError.Message)
 	}
 	return pdeStateRes.Result, nil
@@ -114,14 +114,14 @@ func (b *ExchangeRatesRelayer) getPRVRate() (uint64, error) {
 	return tokenPoolValueToBuy - newTokenPoolValueToBuy, nil
 }
 
-func convertPublicTokenPriceToPToken(price *big.Float) uint64 {
+func (b *ExchangeRatesRelayer) convertPublicTokenPriceToPToken(price *big.Float) uint64 {
 	var e6 = new(big.Float).SetFloat64(math.Pow10(6))
 	mul := new(big.Float).Mul(price, e6)
 
 	result := new(big.Int)
 	mul.Int(result)
 
-	fmt.Printf("ExchangeRatesRelayer: Convert public token to pToken, price: %+v, result %+v\n", price.String(), result.Uint64())
+	b.Logger.Infof("ExchangeRatesRelayer: Convert public token to pToken, price: %+v, result %+v\n", price.String(), result.Uint64())
 
 	return result.Uint64()
 }
@@ -143,10 +143,10 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 		price, ok := price.SetString(btcPrice.Price)
 
 		if !ok {
-			fmt.Println("SetString: BTC error")
+			b.Logger.Info("SetString: BTC error")
 		}
 
-		if converted := convertPublicTokenPriceToPToken(price); ok && converted > 0 {
+		if converted := b.convertPublicTokenPriceToPToken(price); ok && converted > 0 {
 			rates[BTCID] = converted
 		}
 	}
@@ -156,10 +156,10 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 		price, ok := price.SetString(bnbPrice.Price)
 
 		if !ok {
-			fmt.Println("SetString: BNB error")
+			b.Logger.Info("SetString: BNB error")
 		}
 
-		if converted := convertPublicTokenPriceToPToken(price); converted > 0 {
+		if converted := b.convertPublicTokenPriceToPToken(price); converted > 0 {
 			rates[BNBID] = converted
 		}
 	}
@@ -174,31 +174,39 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 		return err
 	}
 
-	fmt.Printf("pushExchangeRates success with TxID: %v\n", txID)
+	b.Logger.Infof("pushExchangeRates success with TxID: %v\n", txID)
 	return nil
 }
 
 func (b *ExchangeRatesRelayer) Execute() {
-	fmt.Println("ExchangeRatesRelayer agent is executing...")
+	b.Logger.Info("ExchangeRatesRelayer agent is executing...")
 	prvRate, err := b.getPRVRate()
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
+		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
+		b.Logger.Errorf(msg)
+		utils.SendSlackNotification(msg)
 	}
 
 	btcPrice, err := b.getPublicTokenRates(BTCSymbol)
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
+		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
+		b.Logger.Errorf(msg)
+		utils.SendSlackNotification(msg)
 	}
 
 	bnbPrice, err := b.getPublicTokenRates(BNBSymbol)
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
+		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
+		b.Logger.Errorf(msg)
+		utils.SendSlackNotification(msg)
 	}
 
 	err = b.pushExchangeRates(btcPrice, bnbPrice, prvRate)
 	if err != nil {
-		fmt.Printf("ExchangeRatesRelayer: has a error, %v\n", err)
+		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
+		b.Logger.Errorf(msg)
+		utils.SendSlackNotification(msg)
 	}
 
-	fmt.Println("ExchangeRatesRelayer agent finished...")
+	b.Logger.Info("ExchangeRatesRelayer agent finished...")
 }
