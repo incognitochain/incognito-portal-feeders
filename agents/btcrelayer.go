@@ -73,7 +73,7 @@ func (b *BTCRelayer) relayBTCBlockToIncognito(
 	if err != nil {
 		return err
 	}
-	b.Logger.Infof("relayBTCBlockToIncognito success with TxID: %v\n", txID)
+	b.Logger.Infof("relayBTCBlockToIncognito success (%d) with TxID: %v\n", btcBlockHeight, txID)
 	return nil
 }
 
