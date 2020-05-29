@@ -80,7 +80,7 @@ func registerExchangeRatesRelayer(
 	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
 	exchangeRates.Name = "exchange-rates-relayer"
-	exchangeRates.Frequency = 30
+	exchangeRates.Frequency = 5
 	exchangeRates.Quit = make(chan bool)
 	exchangeRates.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	exchangeRates.RestfulClient = restfulClient
@@ -97,7 +97,7 @@ func NewServer() *Server {
 	agents := []agents.Agent{}
 	agents = registerBTCRelayer(agents)
 	// agents = registerBNBRelayer(agents)
-	// agents = registerExchangeRatesRelayer(agents)
+	agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)

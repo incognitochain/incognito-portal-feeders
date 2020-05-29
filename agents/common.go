@@ -79,7 +79,7 @@ func SplitUTXOs(
 ) error {
 	rpcClient := rpcclient.NewHttpClient(client.GetURL(), "", "", 0)
 
-	err := transaction.SplitUTXOs(rpcClient, privateKeyStr, numUTXOs)
+	err := transaction.SplitUTXOs(rpcClient, privateKeyStr, numUTXOs, DefaultFee)
 	if err != nil {
 		return err
 	}
