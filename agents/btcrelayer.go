@@ -114,20 +114,11 @@ func (b *BTCRelayer) Execute() {
 		utils.SendSlackNotification(msg)
 		return
 	}
-	b.Logger.Infof("Latest BTC block height: %s", latestBTCBlkHeight)
+	b.Logger.Infof("Latest BTC block height: %d", latestBTCBlkHeight)
 
-	// cypherBlock, err := bc.GetBlock(0, latestBTCBlkHash, nil)
-	// if err != nil {
-	// 	msg := fmt.Sprintf("Get cypher block err: %v", err)
-	// 	b.Logger.Error(msg)
-	// 	utils.SendSlackNotification(msg)
-	// 	return
-	// }
 	nextBlkHeight := latestBTCBlkHeight + 1
 	blockQueue := make(chan btcBlockRes, BTCBlockBatchSize)
 	relayingResQueue := make(chan error, BTCBlockBatchSize)
-	// lastCheckpoint := time.Now().UnixNano()
-	// lastCheckedBlockHash := latestBTCBlkHash
 	for {
 		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
 			i := i // create locals for closure below
@@ -163,11 +154,6 @@ func (b *BTCRelayer) Execute() {
 
 		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
 			relayingErr := <-relayingResQueue
-			//// TODO: remove it after testing
-			if relayingErr != nil {
-				fmt.Println("hahaha: ", relayingErr.Error(), strings.Contains(relayingErr.Error(), "HTTP 404 Not Found"))
-			}
-			/////
 
 			if relayingErr != nil {
 				if !strings.Contains(relayingErr.Error(), "HTTP 404 Not Found") {
@@ -178,26 +164,6 @@ func (b *BTCRelayer) Execute() {
 				return
 			}
 		}
-
-		// if time.Now().UnixNano() >= lastCheckpoint+time.Duration(180*time.Second).Nanoseconds() {
-		// 	b.Logger.Info("Starting checking latest block height...")
-		// 	latestBlockHash, err := b.getLatestBTCBlockHashFromIncog()
-		// 	if err != nil {
-		// 		msg := fmt.Sprintf("Checking failed with getLatestBTCBlockHashFromIncog error: %v\n", err)
-		// 		b.Logger.Error(msg)
-		// 		utils.SendSlackNotification(msg)
-		// 		return
-		// 	}
-		// 	if latestBlockHash == lastCheckedBlockHash {
-		// 		msg := fmt.Sprintf("Latest btc block height on incognito chain has not increased for long time, still %s\n", latestBlockHash)
-		// 		b.Logger.Warn(msg)
-		// 		utils.SendSlackNotification(msg)
-		// 		return
-		// 	}
-		// 	lastCheckpoint = time.Now().UnixNano()
-		// 	lastCheckedBlockHash = latestBlockHash
-		// 	b.Logger.Info("Finished checking latest block height.")
-		// }
 
 		nextBlkHeight += BTCBlockBatchSize
 		time.Sleep(60 * time.Second)
