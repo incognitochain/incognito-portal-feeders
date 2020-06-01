@@ -48,11 +48,51 @@ func registerBTCRelayer(
 	btcR.Name = "bitcoin-relayer"
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
-	btcR.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-	btcR.Network = os.Getenv("BTC_NETWORK")                                                                                             // btc network name
+	btcR.RPCBTCRelayingReader = utils.NewHttpClient(
+		"",
+		os.Getenv("INCOGNITO_READER_PROTOCOL"),
+		os.Getenv("INCOGNITO_READER_HOST"),
+		os.Getenv("INCOGNITO_READER_PORT"),
+	) // incognito chain reader rpc endpoint
+	btcR.RPCClient = utils.NewHttpClient(
+		"",
+		os.Getenv("INCOGNITO_PROTOCOL"),
+		os.Getenv("INCOGNITO_HOST"),
+		os.Getenv("INCOGNITO_PORT"),
+	) // incognito chain rpc endpoint
+	btcR.Network = os.Getenv("BTC_NETWORK") // btc network name
 	logger, err := instantiateLogger(btcR.Name)
 	if err != nil {
 		panic("Could instantiate a logger for bitcoin relayer")
+	}
+	btcR.Logger = logger
+	return append(agentsList, btcR)
+}
+
+func registerBTCRelayingAlerter(
+	agentsList []agents.Agent,
+) []agents.Agent {
+	btcR := &agents.BTCRelayingAlerter{}
+	btcR.ID = 1
+	btcR.Name = "bitcoin-relaying-alerter"
+	btcR.Frequency = 600
+	btcR.Quit = make(chan bool)
+	btcR.RPCBTCRelayingReader = utils.NewHttpClient(
+		"",
+		os.Getenv("INCOGNITO_READER_PROTOCOL"),
+		os.Getenv("INCOGNITO_READER_HOST"),
+		os.Getenv("INCOGNITO_READER_PORT"),
+	) // incognito chain reader rpc endpoint
+	btcR.RPCClient = utils.NewHttpClient(
+		"",
+		os.Getenv("INCOGNITO_PROTOCOL"),
+		os.Getenv("INCOGNITO_HOST"),
+		os.Getenv("INCOGNITO_PORT"),
+	) // incognito chain rpc endpoint
+	btcR.Network = os.Getenv("BTC_NETWORK") // btc network name
+	logger, err := instantiateLogger(btcR.Name)
+	if err != nil {
+		panic("Could instantiate a logger for bitcoin relaying alerter")
 	}
 	btcR.Logger = logger
 	return append(agentsList, btcR)
@@ -80,7 +120,7 @@ func registerExchangeRatesRelayer(
 	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
 	exchangeRates.Name = "exchange-rates-relayer"
-	exchangeRates.Frequency = 30
+	exchangeRates.Frequency = 5
 	exchangeRates.Quit = make(chan bool)
 	exchangeRates.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	exchangeRates.RestfulClient = restfulClient
@@ -96,8 +136,9 @@ func registerExchangeRatesRelayer(
 func NewServer() *Server {
 	agents := []agents.Agent{}
 	agents = registerBTCRelayer(agents)
+	agents = registerBTCRelayingAlerter(agents)
 	// agents = registerBNBRelayer(agents)
-	// agents = registerExchangeRatesRelayer(agents)
+	agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)

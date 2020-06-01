@@ -6,7 +6,17 @@ import (
 
 	"github.com/0xkraken/incognito-sdk-golang/rpcclient"
 	"github.com/0xkraken/incognito-sdk-golang/transaction"
+	"github.com/blockcypher/gobcy"
 )
+
+func getBlockCypherAPI(networkName string) gobcy.API {
+	//explicitly
+	bc := gobcy.API{}
+	bc.Token = "029727206f7e4c8fb19301e4629c5793"
+	bc.Coin = "btc"        //options: "btc","bcy","ltc","doge"
+	bc.Chain = networkName //depending on coin: "main","test3","test"
+	return bc
+}
 
 func CreateAndSendNormalTx(
 	client *utils.HttpClient,
@@ -79,7 +89,7 @@ func SplitUTXOs(
 ) error {
 	rpcClient := rpcclient.NewHttpClient(client.GetURL(), "", "", 0)
 
-	err := transaction.SplitUTXOs(rpcClient, privateKeyStr, numUTXOs)
+	err := transaction.SplitUTXOs(rpcClient, privateKeyStr, numUTXOs, DefaultFee)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"portalfeeders/entities"
@@ -16,7 +17,11 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
+// BTCBlockBatchSize is BTC block batch size
 const BTCBlockBatchSize = 1
+
+// BlockStepBacks is number of blocks that the job needs to step back to solve fork situation
+const BlockStepBacks = 8
 
 type btcBlockRes struct {
 	msgBlock    *wire.MsgBlock
@@ -26,15 +31,7 @@ type btcBlockRes struct {
 
 type BTCRelayer struct {
 	AgentAbs
-}
-
-func getBlockCypherAPI(networkName string) gobcy.API {
-	//explicitly
-	bc := gobcy.API{}
-	bc.Token = "029727206f7e4c8fb19301e4629c5793"
-	bc.Coin = "btc"        //options: "btc","bcy","ltc","doge"
-	bc.Chain = networkName //depending on coin: "main","test3","test"
-	return bc
+	RPCBTCRelayingReader *utils.HttpClient
 }
 
 func buildBTCBlockFromCypher(cypherBlock *gobcy.Block) (*wire.MsgBlock, error) {
@@ -77,51 +74,65 @@ func (b *BTCRelayer) relayBTCBlockToIncognito(
 	return nil
 }
 
-func (b *BTCRelayer) getLatestBTCBlockHashFromIncog() (string, error) {
+func (b *BTCRelayer) getLatestBTCBlockHashFromIncog(bc gobcy.API) (int32, error) {
 	params := []interface{}{}
 	var btcRelayingBestStateRes entities.BTCRelayingBestStateRes
-	err := b.RPCClient.RPCCall("getbtcrelayingbeststate", params, &btcRelayingBestStateRes)
+	err := b.RPCBTCRelayingReader.RPCCall("getbtcrelayingbeststate", params, &btcRelayingBestStateRes)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	if btcRelayingBestStateRes.RPCError != nil {
-		return "", errors.New(btcRelayingBestStateRes.RPCError.Message)
+		return 0, errors.New(btcRelayingBestStateRes.RPCError.Message)
 	}
-	return btcRelayingBestStateRes.Result.Hash.String(), nil
+
+	// check whether there was a fork happened or not
+	btcBestState := btcRelayingBestStateRes.Result
+	if btcBestState == nil {
+		return 0, errors.New("BTC relaying best state is nil")
+	}
+	currentBTCBlkHash := btcBestState.Hash.String()
+	currentBTCBlkHeight := btcBestState.Height
+	cypherBlock, err := bc.GetBlock(int(currentBTCBlkHeight), "", nil)
+	if cypherBlock.Hash != currentBTCBlkHash { // fork detected
+		msg := fmt.Sprintf("There was a fork happened at block %d, stepping back %d blocks now...", currentBTCBlkHeight, BlockStepBacks)
+		b.Logger.Warnf(msg)
+		utils.SendSlackNotification(msg)
+		return currentBTCBlkHeight - BlockStepBacks, nil
+	}
+	return currentBTCBlkHeight, nil
 }
 
 func (b *BTCRelayer) Execute() {
 	b.Logger.Info("BTCRelayer agent is executing...")
-
-	// get latest BNB block from Incognito
-	latestBTCBlkHash, err := b.getLatestBTCBlockHashFromIncog()
-	if err != nil {
-		msg := fmt.Sprintf("Could not get latest btc block hash from incognito chain - with err: %v", err)
-		b.Logger.Errorf(msg)
-		utils.SendSlackNotification(msg)
-		return
-	}
-	b.Logger.Infof("latestBTCBlkHash: %s", latestBTCBlkHash)
-
 	bc := getBlockCypherAPI(b.GetNetwork())
-	cypherBlock, err := bc.GetBlock(0, latestBTCBlkHash, nil)
+
+	// get latest BTC block from Incognito
+	latestBTCBlkHeight, err := b.getLatestBTCBlockHashFromIncog(bc)
 	if err != nil {
-		msg := fmt.Sprintf("Get cypher block err: %v", err)
-		b.Logger.Infof(msg)
+		msg := fmt.Sprintf("Could not get latest btc block height from incognito chain - with err: %v", err)
+		b.Logger.Error(msg)
 		utils.SendSlackNotification(msg)
 		return
 	}
-	nextBlkHeight := cypherBlock.Height + 1
+	b.Logger.Infof("Latest BTC block height: %s", latestBTCBlkHeight)
 
+	// cypherBlock, err := bc.GetBlock(0, latestBTCBlkHash, nil)
+	// if err != nil {
+	// 	msg := fmt.Sprintf("Get cypher block err: %v", err)
+	// 	b.Logger.Error(msg)
+	// 	utils.SendSlackNotification(msg)
+	// 	return
+	// }
+	nextBlkHeight := latestBTCBlkHeight + 1
 	blockQueue := make(chan btcBlockRes, BTCBlockBatchSize)
 	relayingResQueue := make(chan error, BTCBlockBatchSize)
-	lastCheckpoint := time.Now().UnixNano()
-	lastCheckedBlockHash := latestBTCBlkHash
+	// lastCheckpoint := time.Now().UnixNano()
+	// lastCheckedBlockHash := latestBTCBlkHash
 	for {
 		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
 			i := i // create locals for closure below
 			go func() {
-				block, err := bc.GetBlock(i, "", nil)
+				block, err := bc.GetBlock(int(i), "", nil)
 				if err != nil {
 					res := btcBlockRes{msgBlock: nil, blockHeight: int64(0), err: err}
 					blockQueue <- res
@@ -142,7 +153,7 @@ func (b *BTCRelayer) Execute() {
 				if btcBlkRes.err != nil {
 					relayingResQueue <- btcBlkRes.err
 				} else {
-					//relay next BNB block to Incognito
+					//relay next BTC block to Incognito
 					err := b.relayBTCBlockToIncognito(btcBlkRes.blockHeight, btcBlkRes.msgBlock)
 					relayingResQueue <- err
 				}
@@ -152,36 +163,43 @@ func (b *BTCRelayer) Execute() {
 
 		for i := nextBlkHeight; i < nextBlkHeight+BTCBlockBatchSize; i++ {
 			relayingErr := <-relayingResQueue
+			//// TODO: remove it after testing
 			if relayingErr != nil {
-				msg := fmt.Sprintf("BTC relaying error: %v\n", relayingErr)
-				b.Logger.Infof(msg)
-				utils.SendSlackNotification(msg)
+				fmt.Println("hahaha: ", relayingErr.Error(), strings.Contains(relayingErr.Error(), "HTTP 404 Not Found"))
+			}
+			/////
+
+			if relayingErr != nil {
+				if !strings.Contains(relayingErr.Error(), "HTTP 404 Not Found") {
+					msg := fmt.Sprintf("BTC relaying error: %v\n", relayingErr)
+					b.Logger.Error(msg)
+					utils.SendSlackNotification(msg)
+				}
 				return
 			}
 		}
 
-		if time.Now().UnixNano() >= lastCheckpoint+time.Duration(180*time.Second).Nanoseconds() {
-			b.Logger.Info("Starting checking latest block height...")
-			latestBlockHash, err := b.getLatestBTCBlockHashFromIncog()
-			if err != nil {
-				msg := fmt.Sprintf("getLatestBTCBlockHashFromIncog error: %v\n", err)
-				b.Logger.Errorf(msg)
-				utils.SendSlackNotification(msg)
-				return
-			}
-			if latestBlockHash == lastCheckedBlockHash {
-				msg := fmt.Sprintf("Latest btc block height on incognito chain has not increased for long time, still %s\n", latestBlockHash)
-				b.Logger.Warnf(msg)
-				utils.SendSlackNotification(msg)
-				return
-			}
-			lastCheckpoint = time.Now().UnixNano()
-			lastCheckedBlockHash = latestBlockHash
-			b.Logger.Info("Finished checking latest block height.")
-		}
+		// if time.Now().UnixNano() >= lastCheckpoint+time.Duration(180*time.Second).Nanoseconds() {
+		// 	b.Logger.Info("Starting checking latest block height...")
+		// 	latestBlockHash, err := b.getLatestBTCBlockHashFromIncog()
+		// 	if err != nil {
+		// 		msg := fmt.Sprintf("Checking failed with getLatestBTCBlockHashFromIncog error: %v\n", err)
+		// 		b.Logger.Error(msg)
+		// 		utils.SendSlackNotification(msg)
+		// 		return
+		// 	}
+		// 	if latestBlockHash == lastCheckedBlockHash {
+		// 		msg := fmt.Sprintf("Latest btc block height on incognito chain has not increased for long time, still %s\n", latestBlockHash)
+		// 		b.Logger.Warn(msg)
+		// 		utils.SendSlackNotification(msg)
+		// 		return
+		// 	}
+		// 	lastCheckpoint = time.Now().UnixNano()
+		// 	lastCheckedBlockHash = latestBlockHash
+		// 	b.Logger.Info("Finished checking latest block height.")
+		// }
 
 		nextBlkHeight += BTCBlockBatchSize
-
-		time.Sleep(30 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }
