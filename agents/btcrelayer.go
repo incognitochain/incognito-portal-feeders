@@ -93,6 +93,9 @@ func (b *BTCRelayer) getLatestBTCBlockHashFromIncog(bc gobcy.API) (int32, error)
 	currentBTCBlkHash := btcBestState.Hash.String()
 	currentBTCBlkHeight := btcBestState.Height
 	cypherBlock, err := bc.GetBlock(int(currentBTCBlkHeight), "", nil)
+	if err != nil {
+		return 0, err
+	}
 	if cypherBlock.Hash != currentBTCBlkHash { // fork detected
 		msg := fmt.Sprintf("There was a fork happened at block %d, stepping back %d blocks now...", currentBTCBlkHeight, BlockStepBacks)
 		b.Logger.Warnf(msg)
