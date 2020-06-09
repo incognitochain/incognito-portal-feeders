@@ -8,12 +8,12 @@ import (
 	"portalfeeders/agents"
 	"portalfeeders/utils"
 	"runtime"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/tendermint/tendermint/rpc/client"
 
+	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 )
@@ -40,10 +40,21 @@ func instantiateLogger(workerName string) (*logrus.Entry, error) {
 	return logger, nil
 }
 
+func buildBTCClient() (*rpcclient.Client, error) {
+	connCfg := &rpcclient.ConnConfig{
+		Host:         fmt.Sprintf("%s:%s", os.Getenv("BTC_NODE_HOST"), os.Getenv("BTC_NODE_PORT")),
+		User:         os.Getenv("BTC_NODE_USERNAME"),
+		Pass:         os.Getenv("BTC_NODE_PASSWORD"),
+		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
+		DisableTLS:   true, // Bitcoin core does not provide TLS by default
+	}
+	return rpcclient.New(connCfg, nil)
+}
+
 func registerBTCRelayer(
 	agentsList []agents.Agent,
 ) []agents.Agent {
-	btcR := &agents.BTCRelayer{}
+	btcR := &agents.BTCRelayerV2{}
 	btcR.ID = 1
 	btcR.Name = "bitcoin-relayer"
 	btcR.Frequency = 60
@@ -66,6 +77,13 @@ func registerBTCRelayer(
 		panic("Could instantiate a logger for bitcoin relayer")
 	}
 	btcR.Logger = logger
+
+	btcClient, err := buildBTCClient()
+	// defer btcClient.Shutdown()
+	if err != nil {
+		panic("Could instantiate btc client for bitcoin relayer")
+	}
+	btcR.BTCClient = btcClient
 	return append(agentsList, btcR)
 }
 
@@ -136,9 +154,9 @@ func registerExchangeRatesRelayer(
 func NewServer() *Server {
 	agents := []agents.Agent{}
 	agents = registerBTCRelayer(agents)
-	agents = registerBTCRelayingAlerter(agents)
+	// agents = registerBTCRelayingAlerter(agents)
 	// agents = registerBNBRelayer(agents)
-	agents = registerExchangeRatesRelayer(agents)
+	// agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)
@@ -204,18 +222,18 @@ func main() {
 	s := NewServer()
 
 	// split utxos before executing agents
-	if os.Getenv("SPLITUTXO") == "true" {
-		incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
-		minNumUTXOTmp := os.Getenv("NUMUTXO")
-		minNumUTXOs, _ := strconv.Atoi(minNumUTXOTmp)
+	// if os.Getenv("SPLITUTXO") == "true" {
+	// 	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
+	// 	minNumUTXOTmp := os.Getenv("NUMUTXO")
+	// 	minNumUTXOs, _ := strconv.Atoi(minNumUTXOTmp)
 
-		rpcClient := utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-		err := agents.SplitUTXOs(rpcClient, incognitoPrivateKey, minNumUTXOs)
-		if err != nil {
-			fmt.Printf("Split utxos error: %v\n", err)
-			return
-		}
-	}
+	// 	rpcClient := utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
+	// 	err := agents.SplitUTXOs(rpcClient, incognitoPrivateKey, minNumUTXOs)
+	// 	if err != nil {
+	// 		fmt.Printf("Split utxos error: %v\n", err)
+	// 		return
+	// 	}
+	// }
 
 	s.Run()
 	for range s.agents {
