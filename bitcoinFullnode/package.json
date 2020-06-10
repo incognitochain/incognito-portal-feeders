@@ -1,0 +1,15 @@
+{
+  "name": "bitcoinfullnode",
+  "version": "1.0.0",
+  "description": "thach dep trai da code cai nay",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "thachddeptrai",
+  "license": "ISC",
+  "dependencies": {
+    "node-cron": "^2.0.3",
+    "slack-node": "^0.1.8"
+  }
+}
