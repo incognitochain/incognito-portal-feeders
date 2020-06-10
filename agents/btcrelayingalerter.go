@@ -56,8 +56,8 @@ func (b *BTCRelayingAlerter) Execute() {
 
 	alertMsg := fmt.Sprintf(
 		`
-		The latest block info from Cypher: Height (%d), Hash (%s)
-		The latest block info from Incognito: Height (%d), Hash (%s)
+		The latest block info from Cypher: height (%d), hash (%s)
+		The latest block info from Incognito: height (%d), hash (%s)
 		Incognito's is behind %d blocks against Cypher's
 		`,
 		btcCypherChain.Height, btcCypherChain.Hash,

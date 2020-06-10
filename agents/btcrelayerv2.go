@@ -144,7 +144,7 @@ func (b *BTCRelayerV2) Execute() {
 			relayingErr := <-relayingResQueue
 
 			if relayingErr != nil {
-				if !strings.Contains(relayingErr.Error(), "HTTP 404 Not Found") {
+				if !strings.Contains(relayingErr.Error(), "Block height out of range") {
 					msg := fmt.Sprintf("BTC relaying error: %v\n", relayingErr)
 					b.Logger.Error(msg)
 					utils.SendSlackNotification(msg)
