@@ -11,7 +11,8 @@ bitcoind -daemon=1 -conf=/home/bitcoin/bitcoin.conf -datadir=/home/bitcoin
 ```
 
 ## BTC fullnode config
-```listen=1
+```
+listen=1
 server=1
 rpcuser=USERNAME
 rpcpassword=PASSWORD
@@ -22,4 +23,5 @@ blocknotify=/home/bitcoin/block.sh %s
 port=8332
 rpcport=18332
 rpcbind=127.0.0.1
-rpcbind=YOURIP```
+rpcbind=YOURIP
+```
