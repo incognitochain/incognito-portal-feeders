@@ -1,7 +1,7 @@
 var http = require('http');
 const cron = require("node-cron");
 const Slack = require('slack-node');
-const webhookUri = 'https://hooks.slack.com/services/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';
+const webhookUri = 'SLACK-HOOK-URL';
 const slack = new Slack();
 slack.setWebhook(webhookUri);
 var httpServer = http.createServer(function (req, res) {
