@@ -1,8 +1,8 @@
 # Incognito Portal feeders
 
 ## How to run BTC fullnode
-wget https://bitcoin.org/bin/bitcoin-core-0.20.0/bitcoin-0.20.0-x86_64-linux-gnu.tar.gz
 ```
+wget https://bitcoin.org/bin/bitcoin-core-0.20.0/bitcoin-0.20.0-x86_64-linux-gnu.tar.gz
 tar -xvzf bitcoin-0.20.0-x86_64-linux-gnu.tar.gz
 cd bitcoin-0.20.0/bin
 cp bitcoind /usr/local/bin/
