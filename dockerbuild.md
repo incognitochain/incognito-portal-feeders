@@ -1,4 +1,4 @@
-### uild dockerfile
+### Build dockerfile
 ```
 $ docker build -t portalfeeders .
 ```
