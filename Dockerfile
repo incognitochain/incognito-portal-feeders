@@ -1,6 +1,6 @@
 FROM golang:1.13.1
 
-LABEL maintainer="Hoang Nguyen Gia <hoang@incognito.org>"
+LABEL maintainer="Incognito Chain <go@incognito.org>"
 
 WORKDIR /go/src/app
 COPY go.mod .
