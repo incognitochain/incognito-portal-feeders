@@ -8,6 +8,7 @@ import (
 	"portalfeeders/agents"
 	"portalfeeders/utils"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -91,7 +92,7 @@ func registerBTCRelayingAlerter(
 	agentsList []agents.Agent,
 ) []agents.Agent {
 	btcR := &agents.BTCRelayingAlerter{}
-	btcR.ID = 1
+	btcR.ID = 2
 	btcR.Name = "bitcoin-relaying-alerter"
 	btcR.Frequency = 600
 	btcR.Quit = make(chan bool)
@@ -138,7 +139,7 @@ func registerExchangeRatesRelayer(
 	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ID = 3
 	exchangeRates.Name = "exchange-rates-relayer"
-	exchangeRates.Frequency = 5
+	exchangeRates.Frequency = 30
 	exchangeRates.Quit = make(chan bool)
 	exchangeRates.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	exchangeRates.RestfulClient = restfulClient
@@ -154,9 +155,9 @@ func registerExchangeRatesRelayer(
 func NewServer() *Server {
 	agents := []agents.Agent{}
 	agents = registerBTCRelayer(agents)
-	// agents = registerBTCRelayingAlerter(agents)
+	agents = registerBTCRelayingAlerter(agents)
 	// agents = registerBNBRelayer(agents)
-	// agents = registerExchangeRatesRelayer(agents)
+	agents = registerExchangeRatesRelayer(agents)
 
 	quitChan := make(chan os.Signal)
 	signal.Notify(quitChan, syscall.SIGTERM)
@@ -222,18 +223,18 @@ func main() {
 	s := NewServer()
 
 	// split utxos before executing agents
-	// if os.Getenv("SPLITUTXO") == "true" {
-	// 	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
-	// 	minNumUTXOTmp := os.Getenv("NUMUTXO")
-	// 	minNumUTXOs, _ := strconv.Atoi(minNumUTXOTmp)
+	if os.Getenv("SPLITUTXO") == "true" {
+		incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
+		minNumUTXOTmp := os.Getenv("NUMUTXO")
+		minNumUTXOs, _ := strconv.Atoi(minNumUTXOTmp)
 
-	// 	rpcClient := utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
-	// 	err := agents.SplitUTXOs(rpcClient, incognitoPrivateKey, minNumUTXOs)
-	// 	if err != nil {
-	// 		fmt.Printf("Split utxos error: %v\n", err)
-	// 		return
-	// 	}
-	// }
+		rpcClient := utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
+		err := agents.SplitUTXOs(rpcClient, incognitoPrivateKey, minNumUTXOs)
+		if err != nil {
+			fmt.Printf("Split utxos error: %v\n", err)
+			return
+		}
+	}
 
 	s.Run()
 	for range s.agents {
