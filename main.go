@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/prometheus/common/model"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -49,6 +50,36 @@ func buildBTCClient() (*rpcclient.Client, error) {
 		DisableTLS:   true, // Bitcoin core does not provide TLS by default
 	}
 	return rpcclient.New(connCfg, nil)
+}
+
+func registerBTCMonitor(
+	agentsList []agents.Agent,
+) []agents.Agent {
+	monitor := &agents.BTCMonitor{
+		TimeStart: model.Now(),
+		TimeBlockInterval: 20,
+		AliveCheckInterval: 1,
+		RecentHeight: 1,
+	}
+	// 10 minutes
+	monitor.Frequency = 600
+	monitor.ID = 1
+	monitor.Name = "bitcoin-fullnode-monitor"
+	monitor.Quit = make(chan bool)
+	btcClient, err := buildBTCClient()
+	// defer btcClient.Shutdown()
+	if err != nil {
+		panic("Could instantiate btc client for bitcoin fullnode monitor")
+	}
+	logger, err := instantiateLogger(monitor.Name)
+	if err != nil {
+		panic("Could instantiate a logger for bitcoin fullnode monitor")
+	}
+	monitor.Logger = logger
+
+	monitor.Network = os.Getenv("BTC_NETWORK") // btc network name
+	monitor.BTCClient = btcClient
+	return append(agentsList, monitor)
 }
 
 func registerBTCRelayer(
@@ -153,7 +184,8 @@ func registerExchangeRatesRelayer(
 
 func NewServer() *Server {
 	agents := []agents.Agent{}
-	agents = registerBTCRelayer(agents)
+	agents = registerBTCMonitor(agents)
+	//agents = registerBTCRelayer(agents)
 	// agents = registerBTCRelayingAlerter(agents)
 	// agents = registerBNBRelayer(agents)
 	// agents = registerExchangeRatesRelayer(agents)
