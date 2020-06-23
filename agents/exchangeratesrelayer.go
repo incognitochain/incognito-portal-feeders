@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	cmap "github.com/orcaman/concurrent-map"
 	"math"
 	"math/big"
 	"os"
 	"portalfeeders/entities"
 	"portalfeeders/utils"
 	"strconv"
+	"sync"
 )
 
 type ExchangePlatform int
@@ -24,6 +26,7 @@ type ExchangeRatesRelayer struct {
 	AgentAbs
 	RestfulClient *utils.RestfulClient
 	ListPlatforms []PriceItemOnPlatform
+	ListTokens []string
 }
 
 type ExchangeSymbol struct {
@@ -72,8 +75,9 @@ type BinanceTokens []BinanceData
 //}
 
 // reduce num of get request to public exchange domain
-func (b *ExchangeRatesRelayer) getTokenRatesByExPlatform(platforms []PriceItemOnPlatform) (map[string]priceResult, error) {
-	priceSum :=  make(map[string]priceResult)
+func (b *ExchangeRatesRelayer) getTokenRatesByExPlatform(platforms []PriceItemOnPlatform) (cmap.ConcurrentMap, error) {
+	priceSum := cmap.New()
+	var wg sync.WaitGroup
 	for _, platform := range platforms {
 		result, err := b.RestfulClient.Get(platform.Url, nil, nil)
 		if err != nil {
@@ -83,23 +87,25 @@ func (b *ExchangeRatesRelayer) getTokenRatesByExPlatform(platforms []PriceItemOn
 		// add more exchange platform here
 		switch platform.ExchangeType {
 		case Binance:
-			err = b.extractBinance(platform.SymbolBasedPlatForm, result, priceSum)
+			wg.Add(1)
+			go b.extractBinance(platform.SymbolBasedPlatForm, result, priceSum, &wg)
 		case P2pb2b:
-			err = b.extractP2P(platform.SymbolBasedPlatForm, result, priceSum)
+			wg.Add(1)
+			go b.extractP2P(platform.SymbolBasedPlatForm, result, priceSum, &wg)
 		default:
 			continue
 		}
-		if err != nil {
-			continue
-		}
 	}
+	wg.Wait()
 	return priceSum, nil
 }
 
-func (b *ExchangeRatesRelayer) extractP2P(symbolBasedPlatForm []ExchangeSymbol, result []byte, priceSum map[string]priceResult) (error) {
+func (b *ExchangeRatesRelayer) extractP2P(symbolBasedPlatForm []ExchangeSymbol, result []byte, priceSum cmap.ConcurrentMap, wg *sync.WaitGroup) (error) {
+	defer wg.Done()
 	var temp map[string]interface{}
 	err := json.Unmarshal(result, &temp)
 	if err != nil {
+		b.Logger.Info("Unmashal get %v error", err)
 		return err
 	}
 	tickers, ok := temp["result"].(map[string]interface{})
@@ -126,13 +132,14 @@ func (b *ExchangeRatesRelayer) extractP2P(symbolBasedPlatForm []ExchangeSymbol, 
 					b.Logger.Info("Parse Float: %v error", priceString)
 					return err
 				}
-				getCoinPrice, ok := priceSum[v2.TokenID]
+				getCoinPrice, ok := priceSum.Get(v2.TokenID)
 				if ok {
-					getCoinPrice.total += s
-					getCoinPrice.count++
-					priceSum[v2.TokenID] = getCoinPrice
+					temp := getCoinPrice.(priceResult)
+					temp.total += s
+					temp.count++
+					priceSum.Set(v2.TokenID, temp)
 				} else {
-					priceSum[v2.TokenID] = priceResult{total: s, count: 1}
+					priceSum.Set(v2.TokenID, priceResult{total: s, count: 1})
 				}
 			}
 		}
@@ -140,7 +147,8 @@ func (b *ExchangeRatesRelayer) extractP2P(symbolBasedPlatForm []ExchangeSymbol, 
 	return nil
 }
 
-func (b *ExchangeRatesRelayer) extractBinance(symbolBasedPlatForm []ExchangeSymbol, result []byte, priceSum map[string]priceResult) (error) {
+func (b *ExchangeRatesRelayer) extractBinance(symbolBasedPlatForm []ExchangeSymbol, result []byte, priceSum cmap.ConcurrentMap, wg *sync.WaitGroup) (error) {
+	defer wg.Done()
 	var temp BinanceTokens
 	err := json.Unmarshal(result, &temp)
 	if err != nil {
@@ -154,13 +162,14 @@ func (b *ExchangeRatesRelayer) extractBinance(symbolBasedPlatForm []ExchangeSymb
 					b.Logger.Info("Parse Float: %v error", v.Price)
 					return err
 				}
-				getCoinPrice, ok := priceSum[v2.TokenID]
+				getCoinPrice, ok := priceSum.Get(v2.TokenID)
 				if ok {
-					getCoinPrice.total += s
-					getCoinPrice.count++
-					priceSum[v2.TokenID] = getCoinPrice
+					temp := getCoinPrice.(priceResult)
+					temp.total += s
+					temp.count++
+					priceSum.Set(v2.TokenID, temp)
 				} else {
-					priceSum[v2.TokenID] = priceResult{total: s, count: 1}
+					priceSum.Set(v2.TokenID, priceResult{total: s, count: 1})
 				}
 			}
 		}
@@ -254,7 +263,7 @@ func (b *ExchangeRatesRelayer) convertPublicTokenPriceToPToken(price *big.Float)
 }
 
 func (b *ExchangeRatesRelayer) pushExchangeRates(
-	prices map[string]priceResult,
+	prices cmap.ConcurrentMap,
 	prvRate uint64,
 ) error {
 	rates := make(map[string]uint64)
@@ -264,10 +273,14 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 		rates[PRVID] = prvRate
 	}
 
-	for tokenId, priceItem := range prices {
-		if priceItem.count == 0 {
-			b.Logger.Info("No response on token: %v", tokenId)
+	for _, tokenId := range b.ListTokens {
+		temp, ok := prices.Get(tokenId)
+		if !ok {
+			msg := fmt.Sprintf("ExchangeRatesRelayer: has an error, can not get prices on tokenid %v", tokenId)
+			b.Logger.Errorf(msg)
+			utils.SendSlackNotification(msg)
 		}
+		priceItem := temp.(priceResult)
 
 		if converted := b.convertPublicTokenPriceToPToken(big.NewFloat(priceItem.total / float64(priceItem.count))); converted > 0 {
 			rates[tokenId] = converted
@@ -292,21 +305,20 @@ func (b *ExchangeRatesRelayer) Execute() {
 	b.Logger.Info("ExchangeRatesRelayer agent is executing...")
 	prvRate, err := b.getPRVRate()
 	if err != nil {
-		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
+		msg := fmt.Sprintf("ExchangeRatesRelayer: has an error, %v\n", err)
 		b.Logger.Errorf(msg)
 		utils.SendSlackNotification(msg)
 	}
-
 	mapPrice, err := b.getTokenRatesByExPlatform(b.ListPlatforms)
 	if err != nil {
-		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
+		msg := fmt.Sprintf("ExchangeRatesRelayer: has an error, %v\n", err)
 		b.Logger.Errorf(msg)
 		utils.SendSlackNotification(msg)
 	}
 
 	err = b.pushExchangeRates(mapPrice, prvRate)
 	if err != nil {
-		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
+		msg := fmt.Sprintf("ExchangeRatesRelayer: has an error, %v\n", err)
 		b.Logger.Errorf(msg)
 		utils.SendSlackNotification(msg)
 	}

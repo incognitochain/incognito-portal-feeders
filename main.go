@@ -166,9 +166,11 @@ func registerExchangeRatesRelayer(
 			ExchangeType: agents.P2pb2b,
 		},
 	}
+	listTokens := []string{agents.BTCID, agents.BNBID}
 
 	exchangeRates := &agents.ExchangeRatesRelayer{}
 	exchangeRates.ListPlatforms = listPlatform
+	exchangeRates.ListTokens = listTokens
 	exchangeRates.ID = 3
 	exchangeRates.Name = "exchange-rates-relayer"
 	exchangeRates.Frequency = 60
