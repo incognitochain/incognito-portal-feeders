@@ -9,36 +9,163 @@ import (
 	"os"
 	"portalfeeders/entities"
 	"portalfeeders/utils"
+	"strconv"
+)
+
+type ExchangePlatform int
+
+const (
+	Init ExchangePlatform = iota
+	Binance
+	P2pb2b
 )
 
 type ExchangeRatesRelayer struct {
 	AgentAbs
 	RestfulClient *utils.RestfulClient
+	ListPlatforms []PriceItemOnPlatform
 }
 
-type PriceItem struct {
+type ExchangeSymbol struct {
 	Symbol string
 	Price  string
+	TokenID string
 }
 
-func (b *ExchangeRatesRelayer) getPublicTokenRates(symbol string) (PriceItem, error) {
-	symbolFilter := map[string]string {
-		"symbol": symbol,
-	}
+type PriceItemOnPlatform struct {
+	SymbolBasedPlatForm []ExchangeSymbol
+	Url string
+	ExchangeType ExchangePlatform
+}
 
-	result, err := b.RestfulClient.Get("/ticker/price", nil, symbolFilter)
+type priceResult struct {
+	total float64
+	count int
+}
+
+// Binance prices
+type BinanceData struct {
+	SymBol string
+	Price string
+}
+
+type BinanceTokens []BinanceData
+
+//func (b *ExchangeRatesRelayer) getPublicTokenRates(symbol string) (PriceItem, error) {
+//	symbolFilter := map[string]string {
+//		"symbol": symbol,
+//	}
+//
+//	result, err := b.RestfulClient.Get("/ticker/price", nil, symbolFilter)
+//	if err != nil {
+//		return PriceItem{}, err
+//	}
+//
+//	var priceItems PriceItem
+//	err = json.Unmarshal(result, &priceItems)
+//	if err != nil {
+//		b.Logger.Errorf("ExchangeRatesRelayer: has a error when unmarshal, %v\n", err)
+//		return PriceItem{}, errors.New("ExchangeRatesRelayer: has a error when unmarshal")
+//	}
+//
+//	return priceItems, nil
+//}
+
+// reduce num of get request to public exchange domain
+func (b *ExchangeRatesRelayer) getTokenRatesByExPlatform(platforms []PriceItemOnPlatform) (map[string]priceResult, error) {
+	priceSum :=  make(map[string]priceResult)
+	for _, platform := range platforms {
+		result, err := b.RestfulClient.Get(platform.Url, nil, nil)
+		if err != nil {
+			b.Logger.Info("Get exchange rate: %v error", err)
+			continue
+		}
+		// add more exchange platform here
+		switch platform.ExchangeType {
+		case Binance:
+			err = b.extractBinance(platform.SymbolBasedPlatForm, result, priceSum)
+		case P2pb2b:
+			err = b.extractP2P(platform.SymbolBasedPlatForm, result, priceSum)
+		default:
+			continue
+		}
+		if err != nil {
+			continue
+		}
+	}
+	return priceSum, nil
+}
+
+func (b *ExchangeRatesRelayer) extractP2P(symbolBasedPlatForm []ExchangeSymbol, result []byte, priceSum map[string]priceResult) (error) {
+	var temp map[string]interface{}
+	err := json.Unmarshal(result, &temp)
 	if err != nil {
-		return PriceItem{}, err
+		return err
 	}
+	tickers, ok := temp["result"].(map[string]interface{})
+	if !ok {
+		b.Logger.Info("Value of key result is missing: %v error", temp)
+		return errors.New("missing value")
+	}
+	for k, v := range tickers{
+		for _, v2 := range symbolBasedPlatForm {
+			if k == v2.Symbol {
+				ticker, ok := v.(map[string]interface{})["ticker"]
+				if !ok {
+					b.Logger.Info("Field ticker is missing: %v", v)
+					return errors.New("missing value")
+				}
+				priceString, ok := ticker.(map[string]interface{})["last"]
+				if !ok {
+					b.Logger.Info("Index last is missing: %v error", priceString)
+					return errors.New("missing value")
+				}
 
-	var priceItems PriceItem
-	err = json.Unmarshal(result, &priceItems)
+				s, err := strconv.ParseFloat(priceString.(string), 32)
+				if err != nil {
+					b.Logger.Info("Parse Float: %v error", priceString)
+					return err
+				}
+				getCoinPrice, ok := priceSum[v2.TokenID]
+				if ok {
+					getCoinPrice.total += s
+					getCoinPrice.count++
+					priceSum[v2.TokenID] = getCoinPrice
+				} else {
+					priceSum[v2.TokenID] = priceResult{total: s, count: 1}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (b *ExchangeRatesRelayer) extractBinance(symbolBasedPlatForm []ExchangeSymbol, result []byte, priceSum map[string]priceResult) (error) {
+	var temp BinanceTokens
+	err := json.Unmarshal(result, &temp)
 	if err != nil {
-		b.Logger.Errorf("ExchangeRatesRelayer: has a error when unmarshal, %v\n", err)
-		return PriceItem{}, errors.New("ExchangeRatesRelayer: has a error when unmarshal")
+		return err
 	}
-
-	return priceItems, nil
+	for _, v := range temp{
+		for _, v2 := range symbolBasedPlatForm {
+			if v.SymBol == v2.Symbol {
+				s, err := strconv.ParseFloat(v.Price, 32)
+				if err != nil {
+					b.Logger.Info("Parse Float: %v error", v.Price)
+					return err
+				}
+				getCoinPrice, ok := priceSum[v2.TokenID]
+				if ok {
+					getCoinPrice.total += s
+					getCoinPrice.count++
+					priceSum[v2.TokenID] = getCoinPrice
+				} else {
+					priceSum[v2.TokenID] = priceResult{total: s, count: 1}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (b *ExchangeRatesRelayer) getLatestBeaconHeight() (uint64, error) {
@@ -127,8 +254,7 @@ func (b *ExchangeRatesRelayer) convertPublicTokenPriceToPToken(price *big.Float)
 }
 
 func (b *ExchangeRatesRelayer) pushExchangeRates(
-	btcPrice PriceItem,
-	bnbPrice PriceItem,
+	prices map[string]priceResult,
 	prvRate uint64,
 ) error {
 	rates := make(map[string]uint64)
@@ -138,29 +264,13 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 		rates[PRVID] = prvRate
 	}
 
-	if len(btcPrice.Price) > 0 {
-		price := new(big.Float)
-		price, ok := price.SetString(btcPrice.Price)
-
-		if !ok {
-			b.Logger.Info("SetString: BTC error")
+	for tokenId, priceItem := range prices {
+		if priceItem.count == 0 {
+			b.Logger.Info("No response on token: %v", tokenId)
 		}
 
-		if converted := b.convertPublicTokenPriceToPToken(price); ok && converted > 0 {
-			rates[BTCID] = converted
-		}
-	}
-
-	if len(bnbPrice.Price) > 0 {
-		price := new(big.Float)
-		price, ok := price.SetString(bnbPrice.Price)
-
-		if !ok {
-			b.Logger.Info("SetString: BNB error")
-		}
-
-		if converted := b.convertPublicTokenPriceToPToken(price); converted > 0 {
-			rates[BNBID] = converted
+		if converted := b.convertPublicTokenPriceToPToken(big.NewFloat(priceItem.total / float64(priceItem.count))); converted > 0 {
+			rates[tokenId] = converted
 		}
 	}
 
@@ -187,21 +297,14 @@ func (b *ExchangeRatesRelayer) Execute() {
 		utils.SendSlackNotification(msg)
 	}
 
-	btcPrice, err := b.getPublicTokenRates(BTCSymbol)
+	mapPrice, err := b.getTokenRatesByExPlatform(b.ListPlatforms)
 	if err != nil {
 		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
 		b.Logger.Errorf(msg)
 		utils.SendSlackNotification(msg)
 	}
 
-	bnbPrice, err := b.getPublicTokenRates(BNBSymbol)
-	if err != nil {
-		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
-		b.Logger.Errorf(msg)
-		utils.SendSlackNotification(msg)
-	}
-
-	err = b.pushExchangeRates(btcPrice, bnbPrice, prvRate)
+	err = b.pushExchangeRates(mapPrice, prvRate)
 	if err != nil {
 		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
 		b.Logger.Errorf(msg)

@@ -134,12 +134,44 @@ func registerBNBRelayer(
 func registerExchangeRatesRelayer(
 	agentsList []agents.Agent,
 ) []agents.Agent {
-	restfulClient := utils.NewRestfulClient(os.Getenv("BINNANCE_HOST"), os.Getenv("BINNANCE_VERSION"))
+	restfulClient := utils.NewRestfulClient()
+
+	listPlatform :=  []agents.PriceItemOnPlatform{
+		{
+			Url: os.Getenv("BINANCE_GET_PRICE"),
+			SymbolBasedPlatForm: []agents.ExchangeSymbol{
+				{
+					Symbol: "BTCUSDT",
+					TokenID: agents.BTCID,
+				},
+				{
+					Symbol: "BNBUSDT",
+					TokenID: agents.BNBID,
+				},
+			},
+			ExchangeType: agents.Binance,
+		},
+		{
+			Url: os.Getenv("P2PB2B_GET_PRICE"),
+			SymbolBasedPlatForm: []agents.ExchangeSymbol{
+				{
+					Symbol: "BTC_USDT",
+					TokenID: agents.BTCID,
+				},
+				{
+					Symbol: "BNB_USDT",
+					TokenID: agents.BNBID,
+				},
+			},
+			ExchangeType: agents.P2pb2b,
+		},
+	}
 
 	exchangeRates := &agents.ExchangeRatesRelayer{}
+	exchangeRates.ListPlatforms = listPlatform
 	exchangeRates.ID = 3
 	exchangeRates.Name = "exchange-rates-relayer"
-	exchangeRates.Frequency = 30
+	exchangeRates.Frequency = 60
 	exchangeRates.Quit = make(chan bool)
 	exchangeRates.RPCClient = utils.NewHttpClient("", os.Getenv("INCOGNITO_PROTOCOL"), os.Getenv("INCOGNITO_HOST"), os.Getenv("INCOGNITO_PORT")) // incognito chain rpc endpoint
 	exchangeRates.RestfulClient = restfulClient

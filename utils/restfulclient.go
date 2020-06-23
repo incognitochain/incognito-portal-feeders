@@ -12,20 +12,16 @@ import (
 
 type RestfulClient struct {
 	client  *http.Client
-	host    string
-	version string
 	apiKey string
 }
 
-func NewRestfulClient(host string, version string) *RestfulClient {
+func NewRestfulClient() *RestfulClient {
 	httpClient := &http.Client{
 		Timeout: time.Second * 60,
 	}
 
 	return &RestfulClient{
 		client:  httpClient,
-		host:    host,
-		version: version,
 	}
 }
 
@@ -34,7 +30,7 @@ func (r *RestfulClient) Get(
 	header map[string]string,
 	queryString map[string]string,
 ) ([]byte, error) {
-	req, err := http.NewRequest("GET", r.host+"/"+r.version+"/"+link, nil)
+	req, err := http.NewRequest("GET", link, nil)
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -57,11 +53,11 @@ func (r *RestfulClient) Get(
 	}
 
 	resp, err := r.client.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		fmt.Println("RestfulClient: Error sending request to server")
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -70,7 +66,7 @@ func (r *RestfulClient) Get(
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, errors.New("RestfulClient: Get api "+r.host + "/" + r.version + "/" + link + " error, status: " + resp.Status + ", body: " + string(respBody))
+		return nil, errors.New("RestfulClient: Get api " + link + " error, status: " + resp.Status + ", body: " + string(respBody))
 	}
 
 	return respBody, nil
