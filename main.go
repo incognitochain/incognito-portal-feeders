@@ -149,6 +149,25 @@ func registerExchangeRatesRelayer(
 		panic("Could instantiate a logger for exchange rates relayer")
 	}
 	exchangeRates.Logger = logger
+	exchangeRates.StackOrder = make(map[string]agents.Price)
+	exchangeRates.WSTokens = []agents.WSSPrices{
+		{
+			StreamName: "btcusdt@aggTrade",
+			TokenId: agents.BTCID,
+		},
+		{
+			StreamName: "bnbusdt@aggTrade",
+			TokenId: agents.BNBID,
+		},
+	}
+
+	wsEndpoint := os.Getenv("BINANCE_WS")
+
+	for _,v := range exchangeRates.WSTokens {
+		wsEndpoint += v.StreamName + "/"
+	}
+	wsEndpoint = wsEndpoint[:len(wsEndpoint) - 1]
+	exchangeRates.Listen(wsEndpoint)
 	return append(agentsList, exchangeRates)
 }
 
