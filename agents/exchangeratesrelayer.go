@@ -4,21 +4,56 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/sacOO7/gowebsocket"
 	"math"
 	"math/big"
 	"os"
+	"os/signal"
 	"portalfeeders/entities"
 	"portalfeeders/utils"
+	"strconv"
 )
 
 type ExchangeRatesRelayer struct {
 	AgentAbs
 	RestfulClient *utils.RestfulClient
+	IsProcessingStack bool
+	StackOrder map[string]Price
+	WSTokens []WSSPrices
+}
+
+type Price struct {
+	total float64
+	count int
+}
+
+type WSSPrices struct {
+	StreamName string
+	TokenId string // this is id of token in incognito chain
 }
 
 type PriceItem struct {
 	Symbol string
 	Price  string
+}
+
+type WSData struct {
+	E string `json:"e"`
+	EE int `json:"E"`
+	S string `json:"s"`
+	A int `json:"a"`
+	P string `json:"p"`
+	Q string `json:"q"`
+	F int `json:"f"`
+	L int `json:"l"`
+	T int `json:"t"`
+	M bool `json:"m"`
+	MM bool `json:"M"`
+}
+
+type Stream struct {
+	StreamName string `json:"stream"`
+	Data WSData `json:"data"`
 }
 
 func (b *ExchangeRatesRelayer) getPublicTokenRates(symbol string) (PriceItem, error) {
@@ -127,8 +162,6 @@ func (b *ExchangeRatesRelayer) convertPublicTokenPriceToPToken(price *big.Float)
 }
 
 func (b *ExchangeRatesRelayer) pushExchangeRates(
-	btcPrice PriceItem,
-	bnbPrice PriceItem,
 	prvRate uint64,
 ) error {
 	rates := make(map[string]uint64)
@@ -138,48 +171,93 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 		rates[PRVID] = prvRate
 	}
 
-	if len(btcPrice.Price) > 0 {
-		price := new(big.Float)
-		price, ok := price.SetString(btcPrice.Price)
-
-		if !ok {
-			b.Logger.Info("SetString: BTC error")
+	for _, v := range b.WSTokens {
+		price, ok := b.StackOrder[v.StreamName]
+		if !ok || price.count == 0{
+			msg := fmt.Sprintf("ExchangeRatesRelayer: can not get price on tokenid %v\n", v.TokenId)
+			b.Logger.Errorf(msg)
+			utils.SendSlackNotification(msg)
+			continue
 		}
-
-		if converted := b.convertPublicTokenPriceToPToken(price); ok && converted > 0 {
-			rates[BTCID] = converted
+		if converted := b.convertPublicTokenPriceToPToken(big.NewFloat(price.total / float64(price.count))); converted > 0 {
+			rates[v.TokenId] = converted
 		}
+		delete(b.StackOrder, v.StreamName)
 	}
 
-	if len(bnbPrice.Price) > 0 {
-		price := new(big.Float)
-		price, ok := price.SetString(bnbPrice.Price)
-
-		if !ok {
-			b.Logger.Info("SetString: BNB error")
-		}
-
-		if converted := b.convertPublicTokenPriceToPToken(price); converted > 0 {
-			rates[BNBID] = converted
-		}
-	}
-
+	b.IsProcessingStack = false
 	if len(rates) == 0 {
 		return errors.New("ExchangeRatesRelayer: Exchange rates is empty")
 	}
-
 	incognitoPrivateKey := os.Getenv("INCOGNITO_PRIVATE_KEY")
 	txID, err := CreateAndSendTxPortalExchangeRate(b.RPCClient, incognitoPrivateKey, rates)
 	if err != nil {
 		return err
 	}
-
 	b.Logger.Infof("pushExchangeRates success with TxID: %v\n", txID)
 	return nil
 }
 
+func (b *ExchangeRatesRelayer) Listen(wssEndpoint string) {
+	go func() {
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt)
+
+		socket := gowebsocket.New(wssEndpoint)
+
+		socket.OnConnectError = func(err error, socket gowebsocket.Socket) {
+			b.Logger.Info("Received connect error - ", err)
+		}
+
+		socket.OnConnected = func(socket gowebsocket.Socket) {
+			b.Logger.Info("Connected to server")
+		}
+
+		socket.OnTextMessage = func(message string, socket gowebsocket.Socket) {
+			if !b.IsProcessingStack {
+				data := Stream{}
+				err := json.Unmarshal([]byte(message), &data)
+				if err != nil {
+					b.Logger.Info("ExchangeRatesRelayer: Can not unmashal data from binance: %v", err)
+					return
+				}
+
+				// stack data here
+				price, ok := b.StackOrder[data.StreamName]
+				s, err := strconv.ParseFloat(data.Data.P, 64)
+				if err != nil {
+					b.Logger.Info("ExchangeRatesRelayer: Can not parse data from binance: %v", err)
+					return
+				}
+				if ok {
+					price.count++
+					price.total += s
+					b.StackOrder[data.StreamName] = price
+				} else {
+					b.StackOrder[data.StreamName] = Price{total: s, count: 1}
+				}
+			}
+		}
+
+		socket.OnDisconnected = func(err error, socket gowebsocket.Socket) {
+			b.Logger.Info("Disconnected from server ")
+			return
+		}
+		socket.Connect()
+
+		for {
+			select {
+			case <-interrupt:
+				b.Logger.Info("interrupt")
+				socket.Close()
+				return
+			}
+		}
+	}()
+}
 func (b *ExchangeRatesRelayer) Execute() {
 	b.Logger.Info("ExchangeRatesRelayer agent is executing...")
+	b.IsProcessingStack = true
 	prvRate, err := b.getPRVRate()
 	if err != nil {
 		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
@@ -187,21 +265,7 @@ func (b *ExchangeRatesRelayer) Execute() {
 		utils.SendSlackNotification(msg)
 	}
 
-	btcPrice, err := b.getPublicTokenRates(BTCSymbol)
-	if err != nil {
-		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
-		b.Logger.Errorf(msg)
-		utils.SendSlackNotification(msg)
-	}
-
-	bnbPrice, err := b.getPublicTokenRates(BNBSymbol)
-	if err != nil {
-		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
-		b.Logger.Errorf(msg)
-		utils.SendSlackNotification(msg)
-	}
-
-	err = b.pushExchangeRates(btcPrice, bnbPrice, prvRate)
+	err = b.pushExchangeRates(prvRate)
 	if err != nil {
 		msg := fmt.Sprintf("ExchangeRatesRelayer: has a error, %v\n", err)
 		b.Logger.Errorf(msg)
