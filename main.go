@@ -64,7 +64,7 @@ func registerBTCRelayer(
 	beaconIps := strings.Split(os.Getenv("INCOGNITO_READER_HOST_LIST"), ",")
 	beaconPorts := strings.Split(os.Getenv("INCOGNITO_READER_PORT_LIST"), ",")
 
-	if len(beaconIps) != len(beaconPorts){
+	if len(beaconIps) != len(beaconPorts) {
 		panic("Hosts and Ports must be equal in btc relaying alerter")
 	}
 
@@ -109,7 +109,7 @@ func registerBTCRelayingAlerter(
 	beaconIps := strings.Split(os.Getenv("INCOGNITO_READER_HOST_LIST"), ",")
 	beaconPorts := strings.Split(os.Getenv("INCOGNITO_READER_PORT_LIST"), ",")
 
-	if len(beaconIps) != len(beaconPorts){
+	if len(beaconIps) != len(beaconPorts) {
 		panic("Hosts and Ports must be equal in btc relaying alerter")
 	}
 
@@ -173,20 +173,24 @@ func registerExchangeRatesRelayer(
 	exchangeRates.WSTokens = []agents.WSSPrices{
 		{
 			StreamName: "btcusdt@aggTrade",
-			TokenId: agents.BTCID,
+			TokenId:    agents.BTCID,
 		},
 		{
 			StreamName: "bnbusdt@aggTrade",
-			TokenId: agents.BNBID,
+			TokenId:    agents.BNBID,
+		},
+		{
+			StreamName: "ethusdt@aggTrade",
+			TokenId:    agents.ETHID,
 		},
 	}
 
 	wsEndpoint := os.Getenv("BINANCE_WS")
 
-	for _,v := range exchangeRates.WSTokens {
+	for _, v := range exchangeRates.WSTokens {
 		wsEndpoint += v.StreamName + "/"
 	}
-	wsEndpoint = wsEndpoint[:len(wsEndpoint) - 1]
+	wsEndpoint = wsEndpoint[:len(wsEndpoint)-1]
 	exchangeRates.Listen(wsEndpoint)
 	return append(agentsList, exchangeRates)
 }

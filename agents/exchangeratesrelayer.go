@@ -11,15 +11,16 @@ import (
 	"os/signal"
 	"portalfeeders/entities"
 	"portalfeeders/utils"
+	"sort"
 	"strconv"
 )
 
 type ExchangeRatesRelayer struct {
 	AgentAbs
-	RestfulClient *utils.RestfulClient
+	RestfulClient     *utils.RestfulClient
 	IsProcessingStack bool
-	StackOrder map[string]Price
-	WSTokens []WSSPrices
+	StackOrder        map[string]Price
+	WSTokens          []WSSPrices
 }
 
 type Price struct {
@@ -29,7 +30,7 @@ type Price struct {
 
 type WSSPrices struct {
 	StreamName string
-	TokenId string // this is id of token in incognito chain
+	TokenId    string // this is id of token in incognito chain
 }
 
 type PriceItem struct {
@@ -38,26 +39,26 @@ type PriceItem struct {
 }
 
 type WSData struct {
-	E string `json:"e"`
-	EE int `json:"E"`
-	S string `json:"s"`
-	A int `json:"a"`
-	P string `json:"p"`
-	Q string `json:"q"`
-	F int `json:"f"`
-	L int `json:"l"`
-	T int `json:"t"`
-	M bool `json:"m"`
-	MM bool `json:"M"`
+	E  string `json:"e"`
+	EE int    `json:"E"`
+	S  string `json:"s"`
+	A  int    `json:"a"`
+	P  string `json:"p"`
+	Q  string `json:"q"`
+	F  int    `json:"f"`
+	L  int    `json:"l"`
+	T  int    `json:"t"`
+	M  bool   `json:"m"`
+	MM bool   `json:"M"`
 }
 
 type Stream struct {
 	StreamName string `json:"stream"`
-	Data WSData `json:"data"`
+	Data       WSData `json:"data"`
 }
 
 func (b *ExchangeRatesRelayer) getPublicTokenRates(symbol string) (PriceItem, error) {
-	symbolFilter := map[string]string {
+	symbolFilter := map[string]string{
 		"symbol": symbol,
 	}
 
@@ -120,33 +121,39 @@ func (b *ExchangeRatesRelayer) getPRVRate() (uint64, error) {
 		return 0, err
 	}
 	poolPairs := pdeState.PDEPoolPairs
-	prvPustPairKey := fmt.Sprintf("pdepool-%d-%s-%s", latestBeaconHeight, PRVID, PUSDTID)
-	prvPustPair, found := poolPairs[prvPustPairKey]
-	if !found || prvPustPair.Token1PoolValue == 0 || prvPustPair.Token2PoolValue == 0 {
-		return 0, nil
-	}
+	var prices []float64
+	for _, v := range ListToken {
+		prvPustPairKey := fmt.Sprintf("pdepool-%d-%s-%s", latestBeaconHeight, PRVID, v.tokenID)
+		prvPustPair, found := poolPairs[prvPustPairKey]
+		if !found || prvPustPair.Token1PoolValue == 0 || prvPustPair.Token2PoolValue == 0 {
+			return 0, nil
+		}
 
-	tokenPoolValueToBuy := prvPustPair.Token1PoolValue
-	tokenPoolValueToSell := prvPustPair.Token2PoolValue
-	if prvPustPair.Token1IDStr == PRVID {
-		tokenPoolValueToSell = prvPustPair.Token1PoolValue
-		tokenPoolValueToBuy = prvPustPair.Token2PoolValue
-	}
+		tokenPoolValueToBuy := prvPustPair.Token1PoolValue
+		tokenPoolValueToSell := prvPustPair.Token2PoolValue
+		if prvPustPair.Token1IDStr == PRVID {
+			tokenPoolValueToSell = prvPustPair.Token1PoolValue
+			tokenPoolValueToBuy = prvPustPair.Token2PoolValue
+		}
 
-	invariant := big.NewInt(0)
-	invariant.Mul(big.NewInt(int64(tokenPoolValueToSell)), big.NewInt(int64(tokenPoolValueToBuy)))
-	newTokenPoolValueToSell := big.NewInt(0)
-	newTokenPoolValueToSell.Add(big.NewInt(int64(tokenPoolValueToSell)), big.NewInt(int64(1e9)))
+		invariant := big.NewInt(0)
+		invariant.Mul(big.NewInt(int64(tokenPoolValueToSell)), big.NewInt(int64(tokenPoolValueToBuy)))
+		newTokenPoolValueToSell := big.NewInt(0)
+		newTokenPoolValueToSell.Add(big.NewInt(int64(tokenPoolValueToSell)), big.NewInt(int64(1e9)))
 
-	newTokenPoolValueToBuy := big.NewInt(0).Div(invariant, newTokenPoolValueToSell).Uint64()
-	modValue := big.NewInt(0).Mod(invariant, newTokenPoolValueToSell)
-	if modValue.Cmp(big.NewInt(0)) != 0 {
-		newTokenPoolValueToBuy++
+		newTokenPoolValueToBuy := big.NewInt(0).Div(invariant, newTokenPoolValueToSell).Uint64()
+		modValue := big.NewInt(0).Mod(invariant, newTokenPoolValueToSell)
+		if modValue.Cmp(big.NewInt(0)) != 0 {
+			newTokenPoolValueToBuy++
+		}
+		if tokenPoolValueToBuy <= newTokenPoolValueToBuy {
+			return 0, nil
+		}
+		prices = append(prices, float64(tokenPoolValueToBuy-newTokenPoolValueToBuy)/math.Pow(10, float64(v.decimals)))
 	}
-	if tokenPoolValueToBuy <= newTokenPoolValueToBuy {
-		return 0, nil
-	}
-	return tokenPoolValueToBuy - newTokenPoolValueToBuy, nil
+	sort.Slice(prices, func(i, j int) bool { return prices[i] < prices[j] })
+	// sort then get median value
+	return uint64(prices[len(prices)/2] * 1e6), nil
 }
 
 func (b *ExchangeRatesRelayer) convertPublicTokenPriceToPToken(price *big.Float) uint64 {
@@ -173,7 +180,7 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 
 	for _, v := range b.WSTokens {
 		price, ok := b.StackOrder[v.StreamName]
-		if !ok || price.count == 0{
+		if !ok || price.count == 0 {
 			msg := fmt.Sprintf("ExchangeRatesRelayer: can not get price on tokenid %v\n", v.TokenId)
 			b.Logger.Errorf(msg)
 			utils.SendSlackNotification(msg)
