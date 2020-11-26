@@ -13,6 +13,10 @@ const (
 	// DefaultExecuteDuration - default execute duration
 	DefaultExecuteDuration = 100
 
+	// decimals
+	USDdecimals     = 1e9
+	ConvertDecimals = 1e3
+
 	//Crypto ID
 	BTCSymbol = "BTCUSDT"
 	BNBSymbol = "BNBUSDT"

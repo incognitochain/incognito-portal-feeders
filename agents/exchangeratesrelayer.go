@@ -153,7 +153,7 @@ func (b *ExchangeRatesRelayer) getPRVRate() (uint64, error) {
 	}
 	sort.Slice(prices, func(i, j int) bool { return prices[i] < prices[j] })
 	// sort then get median value
-	return uint64(prices[len(prices)/2] * 1e6), nil
+	return uint64(prices[len(prices)/2] * USDdecimals), nil
 }
 
 func (b *ExchangeRatesRelayer) convertPublicTokenPriceToPToken(price *big.Float) uint64 {
@@ -187,7 +187,7 @@ func (b *ExchangeRatesRelayer) pushExchangeRates(
 			continue
 		}
 		if converted := b.convertPublicTokenPriceToPToken(big.NewFloat(price.total / float64(price.count))); converted > 0 {
-			rates[v.TokenId] = converted
+			rates[v.TokenId] = converted * ConvertDecimals
 		}
 		delete(b.StackOrder, v.StreamName)
 	}
