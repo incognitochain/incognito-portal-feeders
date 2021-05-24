@@ -9,6 +9,7 @@ import (
 	"portalfeeders/utils"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -60,12 +61,21 @@ func registerBTCRelayer(
 	btcR.Name = "bitcoin-relayer"
 	btcR.Frequency = 60
 	btcR.Quit = make(chan bool)
-	btcR.RPCBTCRelayingReader = utils.NewHttpClient(
-		"",
-		os.Getenv("INCOGNITO_READER_PROTOCOL"),
-		os.Getenv("INCOGNITO_READER_HOST"),
-		os.Getenv("INCOGNITO_READER_PORT"),
-	) // incognito chain reader rpc endpoint
+	beaconIps := strings.Split(os.Getenv("INCOGNITO_READER_HOST_LIST"), ",")
+	beaconPorts := strings.Split(os.Getenv("INCOGNITO_READER_PORT_LIST"), ",")
+
+	if len(beaconIps) != len(beaconPorts) {
+		panic("Hosts and Ports must be equal in btc relaying alerter")
+	}
+
+	for i, v := range beaconIps {
+		btcR.RPCBTCRelayingReaders = append(btcR.RPCBTCRelayingReaders, utils.NewHttpClient(
+			"",
+			os.Getenv("INCOGNITO_READER_PROTOCOL"),
+			v,
+			beaconPorts[i],
+		)) // incognito chain reader rpc
+	}
 	btcR.RPCClient = utils.NewHttpClient(
 		"",
 		os.Getenv("INCOGNITO_PROTOCOL"),
@@ -96,12 +106,22 @@ func registerBTCRelayingAlerter(
 	btcR.Name = "bitcoin-relaying-alerter"
 	btcR.Frequency = 600
 	btcR.Quit = make(chan bool)
-	btcR.RPCBTCRelayingReader = utils.NewHttpClient(
-		"",
-		os.Getenv("INCOGNITO_READER_PROTOCOL"),
-		os.Getenv("INCOGNITO_READER_HOST"),
-		os.Getenv("INCOGNITO_READER_PORT"),
-	) // incognito chain reader rpc endpoint
+	beaconIps := strings.Split(os.Getenv("INCOGNITO_READER_HOST_LIST"), ",")
+	beaconPorts := strings.Split(os.Getenv("INCOGNITO_READER_PORT_LIST"), ",")
+
+	if len(beaconIps) != len(beaconPorts) {
+		panic("Hosts and Ports must be equal in btc relaying alerter")
+	}
+
+	for i, v := range beaconIps {
+		btcR.RPCBTCRelayingReaders = append(btcR.RPCBTCRelayingReaders, utils.NewHttpClient(
+			"",
+			os.Getenv("INCOGNITO_READER_PROTOCOL"),
+			v,
+			beaconPorts[i],
+		)) // incognito chain reader rpc
+	}
+
 	btcR.RPCClient = utils.NewHttpClient(
 		"",
 		os.Getenv("INCOGNITO_PROTOCOL"),
@@ -153,20 +173,24 @@ func registerExchangeRatesRelayer(
 	exchangeRates.WSTokens = []agents.WSSPrices{
 		{
 			StreamName: "btcusdt@aggTrade",
-			TokenId: agents.BTCID,
+			TokenId:    agents.BTCID,
 		},
 		{
 			StreamName: "bnbusdt@aggTrade",
-			TokenId: agents.BNBID,
+			TokenId:    agents.BNBID,
+		},
+		{
+			StreamName: "ethusdt@aggTrade",
+			TokenId:    agents.ETHID,
 		},
 	}
 
 	wsEndpoint := os.Getenv("BINANCE_WS")
 
-	for _,v := range exchangeRates.WSTokens {
+	for _, v := range exchangeRates.WSTokens {
 		wsEndpoint += v.StreamName + "/"
 	}
-	wsEndpoint = wsEndpoint[:len(wsEndpoint) - 1]
+	wsEndpoint = wsEndpoint[:len(wsEndpoint)-1]
 	exchangeRates.Listen(wsEndpoint)
 	return append(agentsList, exchangeRates)
 }

@@ -1,8 +1,8 @@
 package agents
 
 import (
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 
 	"portalfeeders/entities"
 	"portalfeeders/utils"
@@ -10,28 +10,34 @@ import (
 
 type BTCRelayingAlerter struct {
 	AgentAbs
-	RPCBTCRelayingReader *utils.HttpClient
+	RPCBTCRelayingReaders []*utils.HttpClient
 }
 
 func (b *BTCRelayingAlerter) getLatestBTCBlockHashFromIncog() (int32, string, error) {
 	params := []interface{}{}
 	var btcRelayingBestStateRes entities.BTCRelayingBestStateRes
-	err := b.RPCBTCRelayingReader.RPCCall("getbtcrelayingbeststate", params, &btcRelayingBestStateRes)
-	if err != nil {
-		return 0, "", err
-	}
-	if btcRelayingBestStateRes.RPCError != nil {
-		return 0, "", errors.New(btcRelayingBestStateRes.RPCError.Message)
+	var lowestHeight int32
+	var lowestBlockHeightHash string
+
+	for _, btcRelayingHeader := range b.RPCBTCRelayingReaders {
+		err := btcRelayingHeader.RPCCall("getbtcrelayingbeststate", params, &btcRelayingBestStateRes)
+		if err != nil {
+			b.Logger.Error(err)
+			return 0, "", errors.Errorf("Can not get height from beacon: %v", err.Error())
+		}
+		btcBestState := btcRelayingBestStateRes.Result
+		if btcBestState == nil {
+			b.Logger.Error("BTC relaying best state is nil")
+			return 0, "", errors.New("BTC relaying best state is nil")
+		}
+
+		if lowestHeight > btcBestState.Height || lowestHeight == 0 {
+			lowestHeight = btcBestState.Height
+			lowestBlockHeightHash = btcBestState.Hash.String()
+		}
 	}
 
-	// check whether there was a fork happened or not
-	btcBestState := btcRelayingBestStateRes.Result
-	if btcBestState == nil {
-		return 0, "", errors.New("BTC relaying best state is nil")
-	}
-	currentBTCBlkHash := btcBestState.Hash.String()
-	currentBTCBlkHeight := btcBestState.Height
-	return currentBTCBlkHeight, currentBTCBlkHash, nil
+	return lowestHeight, lowestBlockHeightHash, nil
 }
 
 func (b *BTCRelayingAlerter) Execute() {
